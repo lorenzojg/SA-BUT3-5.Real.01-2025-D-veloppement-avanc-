@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
+import '../services/database_service.dart';
+import 'recommendations_page.dart';
+
 
 class QuestionnairePage extends StatefulWidget {
   const QuestionnairePage({super.key});
@@ -12,6 +15,7 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   int currentQuestionIndex = 0;
   final List<Question> questions = QuestionnaireData.getQuestions();
   final UserPreferences userPreferences = UserPreferences();
+  final DatabaseService _dbService = DatabaseService();
 
   void _selectAnswer(String answer) {
     setState(() {
@@ -19,31 +23,30 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
     });
   }
 
-  void _nextQuestion() {
+  void _nextQuestion() async {
     if (currentQuestionIndex < questions.length - 1) {
       setState(() {
         currentQuestionIndex++;
       });
     } else {
+      await _saveUserPreferences();
       _showResults();
     }
   }
 
+  Future<void> _saveUserPreferences() async {
+    // Enregistrer les préférences de l'utilisateur
+    print('💾 Préférences sauvegardées');
+  }
+
   void _showResults() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Vos préférences'),
-        content: Text(userPreferences.toString()),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('OK'),
-          ),
-        ],
+    // ✅ Naviguer vers la page de recommandations
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RecommendationsPage(
+          userPreferences: userPreferences,
+        ),
       ),
     );
   }

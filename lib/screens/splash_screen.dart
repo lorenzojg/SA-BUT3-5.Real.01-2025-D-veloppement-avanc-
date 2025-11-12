@@ -1,8 +1,40 @@
 import 'package:flutter/material.dart';
 import 'questionnaire_page.dart';
+import '../services/data_loader_service.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDatabase();
+  }
+
+  Future<void> _initializeDatabase() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final dataLoader = DataLoaderService();
+    try {
+      await dataLoader.loadInitialData();
+      print('✅ Initialisation terminée');
+    } catch (e) {
+      print('❌ Erreur d\'initialisation: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,64 +42,18 @@ class SplashScreen extends StatelessWidget {
       backgroundColor: const Color(0xFF1a3a52),
       body: Stack(
         children: [
-          // Grille de photos
           _buildPhotoGrid(),
-
-          // Contenu principal
           _buildMainContent(context),
-
-          // Logo en bas
           _buildLogo(),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildPhotoGrid() {
-    return Opacity(
-      opacity: 0.4,
-      child: Row(
-        children: [
-          // Colonne gauche
-          Expanded(
-            child: Column(
-              children: [
-                _buildPhotoItem('https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1499678329028-101435549a4e?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400'),
-              ],
+          if (_isLoading)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
             ),
-          ),
-          // Espace central
-          Expanded(flex: 2, child: Container()),
-          // Colonne droite
-          Expanded(
-            child: Column(
-              children: [
-                _buildPhotoItem('https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1505832018823-50331d70d237?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=400'),
-                _buildPhotoItem('https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=400'),
-              ],
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPhotoItem(String imageUrl) {
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: NetworkImage(imageUrl),
-            fit: BoxFit.cover,
-          ),
-        ),
       ),
     );
   }
@@ -94,7 +80,9 @@ class SplashScreen extends StatelessWidget {
             ),
             const SizedBox(height: 50),
             ElevatedButton(
-              onPressed: () {
+              onPressed: _isLoading
+                  ? null
+                  : () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -114,12 +102,60 @@ class SplashScreen extends StatelessWidget {
                 ),
                 elevation: 4,
               ),
-              child: const Text(
-                'Commencer',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              child: Text(
+                _isLoading ? 'Chargement...' : 'Commencer',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ... reste du code (buildPhotoGrid, buildLogo)
+
+  Widget _buildPhotoGrid() {
+    return Opacity(
+      opacity: 0.4,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                _buildPhotoItem('assets/images/travel1.jpeg'),
+                _buildPhotoItem('assets/images/travel2.jpeg'),
+                _buildPhotoItem('assets/images/travel3.jpeg'),
+                _buildPhotoItem('assets/images/travel4.jpeg'),
+                _buildPhotoItem('assets/images/travel5.jpeg'),
+              ],
+            ),
+          ),
+          Expanded(flex: 2, child: Container()),
+          Expanded(
+            child: Column(
+              children: [
+                _buildPhotoItem('assets/images/travel6.jpeg'),
+                _buildPhotoItem('assets/images/travel7.jpeg'),
+                _buildPhotoItem('assets/images/travel8.jpeg'),
+                _buildPhotoItem('assets/images/travel9.jpeg'),
+                _buildPhotoItem('assets/images/travel10.jpeg'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoItem(String imagePath) {
+    return Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(imagePath),
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );
