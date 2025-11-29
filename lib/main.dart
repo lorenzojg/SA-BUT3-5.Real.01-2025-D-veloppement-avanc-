@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import 'pages/budget_selection_page.dart';
 import 'pages/activity_type_page.dart';
+=======
+import 'screens/splash_screen.dart'; // ✅ Import de la splash screen
+import 'screens/questionnaire_page_budget.dart';
+import 'screens/questionnaire_page_detente_sportif.dart';
+import 'screens/questionnaire_page_continents.dart';
+>>>>>>> b9aab2b (grosse modif)
 
 void main() {
+  // ✅ Assurer que les Bindings sont initialisés pour Sqflite/Assets
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -17,6 +26,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
+<<<<<<< HEAD
       home: const MenuPage(),
     );
   }
@@ -93,4 +103,10 @@ class MenuPage extends StatelessWidget {
       ),
     );
   }
+=======
+      // ✅ Démarrer par la SplashScreen pour l'initialisation des données
+      home: const SplashScreen(),
+    );
+  }
+>>>>>>> b9aab2b (grosse modif)
 }

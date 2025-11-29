@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 
 class ActivityTypePage extends StatefulWidget {
   const ActivityTypePage({super.key});
+=======
+import '../models/questionnaire_model.dart'; // Importez le modèle
+
+class ActivityTypePage extends StatefulWidget {
+  final VoidCallback onNext;
+  final UserPreferences preferences;
+
+  const ActivityTypePage({
+    super.key,
+    required this.onNext,
+    required this.preferences,
+  });
+>>>>>>> b9aab2b (grosse modif)
 
   @override
   State<ActivityTypePage> createState() => _ActivityTypePageState();
@@ -19,10 +33,20 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
   }
 
   void _nextQuestion() {
+<<<<<<< HEAD
     print('Niveau d\'activité sélectionné: $_activityLevel - $_activityDescription');
 
     // TODO: Navigation vers la prochaine question
     // Navigator.push(context, MaterialPageRoute(builder: (context) => NextPage()));
+=======
+    // ✅ Sauvegarder les données dans l'objet de préférences
+    widget.preferences.activityLevel = _activityLevel;
+    
+    print('Niveau d\'activité sélectionné: $_activityLevel - $_activityDescription');
+    
+    // Appeler le callback de navigation
+    widget.onNext();
+>>>>>>> b9aab2b (grosse modif)
   }
 
   @override
@@ -36,11 +60,17 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _buildQuestionTitle(),
+<<<<<<< HEAD
               const SizedBox(height: 40),
               _buildImageComparison(),
               const SizedBox(height: 30),
               _buildActivityDescription(),
               const SizedBox(height: 60),
+=======
+              const SizedBox(height: 50),
+              _buildActivitySlider(),
+              const SizedBox(height: 50),
+>>>>>>> b9aab2b (grosse modif)
               _buildNextButton(),
             ],
           ),
@@ -51,6 +81,7 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
 
   Widget _buildQuestionTitle() {
     return const Text(
+<<<<<<< HEAD
       'Quel type de vacances préférez-vous ?',
       textAlign: TextAlign.center,
       style: TextStyle(
@@ -58,10 +89,19 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
         fontSize: 24,
         fontWeight: FontWeight.w400,
         height: 1.4,
+=======
+      'Quel type de vacances recherchez-vous ?',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+>>>>>>> b9aab2b (grosse modif)
       ),
     );
   }
 
+<<<<<<< HEAD
   Widget _buildImageComparison() {
     return Container(
       height: 300,
@@ -230,6 +270,34 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
           ),
         ),
         const SizedBox(height: 20),
+=======
+  Widget _buildActivitySlider() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            Text('Détente', style: TextStyle(color: Colors.white)),
+            Text('Sportif', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        Slider(
+          value: _activityLevel,
+          min: 0,
+          max: 100,
+          divisions: 100,
+          label: _activityLevel.round().toString(),
+          activeColor: Colors.white,
+          inactiveColor: Colors.white.withOpacity(0.3),
+          onChanged: (double value) {
+            // ✅ Mettre à jour l'état du curseur
+            setState(() {
+              _activityLevel = value;
+            });
+          },
+        ),
+        const SizedBox(height: 30),
+>>>>>>> b9aab2b (grosse modif)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
           decoration: BoxDecoration(
@@ -262,11 +330,16 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
         elevation: 4,
       ),
       child: const Text(
+<<<<<<< HEAD
         'Question suivante',
+=======
+        'Suivant',
+>>>>>>> b9aab2b (grosse modif)
         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
       ),
     );
   }
+<<<<<<< HEAD
 }
 
 // Clipper personnalisé pour afficher la partie droite de l'image
@@ -289,4 +362,6 @@ class _RightClipper extends CustomClipper<Rect> {
   bool shouldReclip(_RightClipper oldClipper) {
     return oldClipper.position != position;
   }
+=======
+>>>>>>> b9aab2b (grosse modif)
 }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
 import '../models/questionnaire_model.dart';
-import '../services/database_service.dart';
-import '../services/recommendation_service.dart'; // ✅ Import
+import '../services/database_service.dart'; // ✅ Import de la base de données
+import '../models/recommendation_service.dart';
 
 class RecommendationsPage extends StatefulWidget {
   final UserPreferences userPreferences;
@@ -21,66 +21,50 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   List<Destination> _destinations = [];
   bool _isLoading = true;
   Map<String, dynamic>? _stats;
+  List<Destination> _allDestinations = []; // Liste complète pour les stats
 
   @override
   void initState() {
     super.initState();
-    _loadDestinationsFromDatabase();
+    _loadRecommendations();
   }
 
-  Future<void> _loadDestinationsFromDatabase() async {
+  Future<void> _loadRecommendations() async {
     print('🔄 Chargement des destinations depuis SQLite...');
 
     try {
-      // Charger toutes les destinations
-      final allDestinations = await _dbService.getAllDestinations();
-      print('📊 ${allDestinations.length} destinations en base');
-
+      // 1. Charger toutes les destinations
+      _allDestinations = await _dbService.getAllDestinations();
+      print('📊 ${_allDestinations.length} destinations en base');
+      
       // ✅ Afficher les préférences de l'utilisateur
       print('\n🎯 Préférences utilisateur :');
-      print('  Budget: ${widget.userPreferences.budget}');
-      print('  Continent: ${widget.userPreferences.continent}');
-      print('  Voyageurs: ${widget.userPreferences.travelers}');
+      print(widget.userPreferences.toString());
 
-      // ✅ Filtrer selon les préférences
-      final filteredDestinations = RecommendationService.filterDestinations(
-        allDestinations,
+      // 2. Filtrer et Trier selon les nouvelles préférences
+      final recommendedDestinations = RecommendationService.filterAndSortDestinations(
+        _allDestinations,
         widget.userPreferences,
       );
 
-      print('\n✅ ${filteredDestinations.length} destinations correspondent aux critères');
-
-      // ✅ Trier par pertinence
-      final sortedDestinations = RecommendationService.sortByRelevance(
-        filteredDestinations,
-        widget.userPreferences,
-      );
-
-      // ✅ Afficher les 5 premières destinations recommandées
-      if (sortedDestinations.isNotEmpty) {
-        print('\n🌟 Top 5 recommandations :');
-        for (var i = 0; i < (sortedDestinations.length < 5 ? sortedDestinations.length : 5); i++) {
-          final dest = sortedDestinations[i];
-          print('  ${i + 1}. ${dest.name} (${dest.country}) - ${dest.continent} - ${dest.averageCost.toInt()}\$');
-        }
-      }
-
-      // ✅ Obtenir les statistiques
+      print('\n✅ ${recommendedDestinations.length} destinations correspondent aux critères');
+      
+      // 3. Obtenir les statistiques
       final stats = RecommendationService.getRecommendationStats(
-        allDestinations,
-        sortedDestinations,
+        _allDestinations,
+        recommendedDestinations,
         widget.userPreferences,
       );
 
       setState(() {
-        _destinations = sortedDestinations;
+        _destinations = recommendedDestinations;
         _stats = stats;
         _isLoading = false;
       });
 
       print('\n📈 Statistiques : ${stats['matchingDestinations']}/${stats['totalDestinations']} destinations (${stats['filterRate']})');
     } catch (e) {
-      print('❌ ERREUR: $e');
+      print('❌ ERREUR lors du chargement des recommandations: $e');
       setState(() {
         _isLoading = false;
       });
@@ -115,7 +99,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               itemCount: _destinations.length,
               itemBuilder: (context, index) {
                 final destination = _destinations[index];
-                return _buildDestinationCard(destination);
+                // Afficher le rang de pertinence
+                final rank = index + 1; 
+                return _buildDestinationCard(destination, rank);
               },
             ),
           ),
@@ -133,6 +119,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             '${_stats!['matchingDestinations']} destinations trouvées',
@@ -141,15 +128,42 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const Divider(color: Colors.white30, height: 20),
+          _buildStatRow('Budget', _stats!['budget']),
+          _buildStatRow('Activité', _stats!['activity']),
+          _buildStatRow('Continents', _stats!['continent']),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildStatRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
           Text(
-            'Budget: ${_stats!['budget']} • ${_stats!['continent']} • ${_stats!['travelers']}',
+            '$label:',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 14,
             ),
-            textAlign: TextAlign.center,
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -203,7 +217,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
-  Widget _buildDestinationCard(Destination destination) {
+  Widget _buildDestinationCard(Destination destination, int rank) {
+    // Calculer le pourcentage de match d'activité
+    final activityMatch = 100 - (destination.activityScore - widget.userPreferences.activityLevel!).abs().round();
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
@@ -257,26 +274,51 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${destination.averageCost.toInt()}\$/jour',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                  // Affichage du rang et du coût
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade700.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '#$rank',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${destination.averageCost.toInt()}\$/jour',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
               const SizedBox(height: 12),
+              // Ligne Score/Activités/UNESCO
               Row(
                 children: [
                   Icon(
@@ -293,6 +335,30 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  const SizedBox(width: 16),
+                  // Match d'activité
+                   Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.lightGreen.shade700.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.lightGreen.shade300,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        'Match Activité: $activityMatch%',
+                        style: TextStyle(
+                          color: Colors.lightGreen.shade300,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   const SizedBox(width: 16),
                   if (destination.unescoSite) ...[
                     Container(

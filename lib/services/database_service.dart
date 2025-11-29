@@ -24,18 +24,25 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,  // ✅ Version 2 pour forcer la migration
+      version: 3,  // ✅ Version incrémentée à 3 pour forcer la recréation
       onCreate: _createTables,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      // Supprimer l'ancienne table et recréer avec les nouveaux champs
+    // Si nous montons de version (par exemple 2 -> 3)
+    if (oldVersion < newVersion) {
+      // Stratégie simple : Supprimer et recréer la table. 
+      // Ceci est justifié ici car nous savons que la structure a changé.
       await db.execute('DROP TABLE IF EXISTS destinations');
       await _createTables(db, newVersion);
       print('🔄 Base de données mise à jour vers la version $newVersion');
+    }
+    // Si la nouvelle version est la 3, nous recréons la table complète.
+    if (newVersion == 3) {
+      await db.execute('DROP TABLE IF EXISTS destinations');
+      await _createTables(db, newVersion);
     }
   }
 
@@ -56,7 +63,8 @@ class DatabaseService {
         travelTypes TEXT NOT NULL,
         rating REAL NOT NULL,
         annualVisitors REAL NOT NULL,
-        unescoSite INTEGER NOT NULL
+        unescoSite INTEGER NOT NULL,
+        activityScore REAL NOT NULL 
       )
     ''');
     print('✅ Table destinations créée (version $version)');
@@ -71,7 +79,7 @@ class DatabaseService {
         'id': destination.id,
         'name': destination.name,
         'country': destination.country,
-        'continent': destination.continent,  // ✅ Ajouté
+        'continent': destination.continent,
         'latitude': destination.latitude,
         'longitude': destination.longitude,
         'activities': destination.activities.join(','),
@@ -79,10 +87,11 @@ class DatabaseService {
         'climate': destination.climate,
         'duration': destination.duration,
         'description': destination.description,
-        'travelTypes': destination.travelTypes.join(','),  // ✅ Ajouté
-        'rating': destination.rating,  // ✅ Ajouté
-        'annualVisitors': destination.annualVisitors,  // ✅ Ajouté
-        'unescoSite': destination.unescoSite ? 1 : 0,  // ✅ Ajouté (SQLite utilise 0/1 pour les booléens)
+        'travelTypes': destination.travelTypes.join(','),
+        'rating': destination.rating,
+        'annualVisitors': destination.annualVisitors,
+        'unescoSite': destination.unescoSite ? 1 : 0,
+        'activityScore': destination.activityScore, // ✅ Doit être présent
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -94,22 +103,28 @@ class DatabaseService {
     final maps = await db.query('destinations');
 
     return List.generate(maps.length, (i) {
+      final map = maps[i];
+      // Sécurisation: Utiliser ?? 50.0 au cas où la colonne n'est pas encore créée
+      // ou contient une valeur nulle (ce qui ne devrait pas arriver avec la migration)
+      final activityScore = (map['activityScore'] as num? ?? 50.0).toDouble();
+
       return Destination(
-        id: maps[i]['id'] as String,
-        name: maps[i]['name'] as String,
-        country: maps[i]['country'] as String,
-        continent: maps[i]['continent'] as String,  // ✅ Ajouté
-        latitude: maps[i]['latitude'] as double,
-        longitude: maps[i]['longitude'] as double,
-        activities: (maps[i]['activities'] as String).split(','),
-        averageCost: maps[i]['averageCost'] as double,
-        climate: maps[i]['climate'] as String,
-        duration: maps[i]['duration'] as int,
-        description: maps[i]['description'] as String,
-        travelTypes: (maps[i]['travelTypes'] as String).split(','),  // ✅ Ajouté
-        rating: maps[i]['rating'] as double,  // ✅ Ajouté
-        annualVisitors: maps[i]['annualVisitors'] as double,  // ✅ Ajouté
-        unescoSite: (maps[i]['unescoSite'] as int) == 1,  // ✅ Ajouté (convertir 0/1 en bool)
+        id: map['id'] as String,
+        name: map['name'] as String,
+        country: map['country'] as String,
+        continent: map['continent'] as String,
+        latitude: (map['latitude'] as num).toDouble(),
+        longitude: (map['longitude'] as num).toDouble(),
+        activities: (map['activities'] as String).split(','),
+        averageCost: (map['averageCost'] as num).toDouble(),
+        climate: map['climate'] as String,
+        duration: (map['duration'] as num).toInt(),
+        description: map['description'] as String,
+        travelTypes: (map['travelTypes'] as String).split(','),
+        rating: (map['rating'] as num).toDouble(),
+        annualVisitors: (map['annualVisitors'] as num).toDouble(),
+        unescoSite: (map['unescoSite'] as int) == 1,
+        activityScore: activityScore, // ✅ Lecture sécurisée
       );
     });
   }
@@ -126,22 +141,27 @@ class DatabaseService {
     if (maps.isEmpty) return null;
 
     final map = maps.first;
+    
+    // Sécurisation de la lecture de activityScore
+    final activityScore = (map['activityScore'] as num? ?? 50.0).toDouble();
+
     return Destination(
       id: map['id'] as String,
       name: map['name'] as String,
       country: map['country'] as String,
       continent: map['continent'] as String,
-      latitude: map['latitude'] as double,
-      longitude: map['longitude'] as double,
+      latitude: (map['latitude'] as num).toDouble(),
+      longitude: (map['longitude'] as num).toDouble(),
       activities: (map['activities'] as String).split(','),
-      averageCost: map['averageCost'] as double,
+      averageCost: (map['averageCost'] as num).toDouble(),
       climate: map['climate'] as String,
-      duration: map['duration'] as int,
+      duration: (map['duration'] as num).toInt(),
       description: map['description'] as String,
       travelTypes: (map['travelTypes'] as String).split(','),
-      rating: map['rating'] as double,
-      annualVisitors: map['annualVisitors'] as double,
+      rating: (map['rating'] as num).toDouble(),
+      annualVisitors: (map['annualVisitors'] as num).toDouble(),
       unescoSite: (map['unescoSite'] as int) == 1,
+      activityScore: activityScore, // ✅ Lecture sécurisée
     );
   }
 
@@ -155,22 +175,26 @@ class DatabaseService {
     );
 
     return List.generate(maps.length, (i) {
+      final map = maps[i];
+      final activityScore = (map['activityScore'] as num? ?? 50.0).toDouble();
+
       return Destination(
-        id: maps[i]['id'] as String,
-        name: maps[i]['name'] as String,
-        country: maps[i]['country'] as String,
-        continent: maps[i]['continent'] as String,
-        latitude: maps[i]['latitude'] as double,
-        longitude: maps[i]['longitude'] as double,
-        activities: (maps[i]['activities'] as String).split(','),
-        averageCost: maps[i]['averageCost'] as double,
-        climate: maps[i]['climate'] as String,
-        duration: maps[i]['duration'] as int,
-        description: maps[i]['description'] as String,
-        travelTypes: (maps[i]['travelTypes'] as String).split(','),
-        rating: maps[i]['rating'] as double,
-        annualVisitors: maps[i]['annualVisitors'] as double,
-        unescoSite: (maps[i]['unescoSite'] as int) == 1,
+        id: map['id'] as String,
+        name: map['name'] as String,
+        country: map['country'] as String,
+        continent: map['continent'] as String,
+        latitude: (map['latitude'] as num).toDouble(),
+        longitude: (map['longitude'] as num).toDouble(),
+        activities: (map['activities'] as String).split(','),
+        averageCost: (map['averageCost'] as num).toDouble(),
+        climate: map['climate'] as String,
+        duration: (map['duration'] as num).toInt(),
+        description: map['description'] as String,
+        travelTypes: (map['travelTypes'] as String).split(','),
+        rating: (map['rating'] as num).toDouble(),
+        annualVisitors: (map['annualVisitors'] as num).toDouble(),
+        unescoSite: (map['unescoSite'] as int) == 1,
+        activityScore: activityScore, // ✅ Lecture sécurisée
       );
     });
   }
