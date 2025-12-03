@@ -16,7 +16,7 @@ class RecommendationService {
   static List<Destination> recommend(
       List<Destination> allDestinations,
       UserPreferences preferences,
-      {int? travelMonth, UserProfileVector? currentProfile}
+      {int? travelMonth, UserProfileVector? currentProfile, int limit = 20}
       ) {
     
     // 1. Initialiser le profil vectoriel de l'utilisateur
@@ -31,16 +31,21 @@ class RecommendationService {
 
     for (var dest in allDestinations) {
       
-      // --- Étape A : Filtrage Dur (Hard Filtering) ---
+      // --- Étape A : Filtrage Souple (Soft Filtering) ---
+      double penalty = 0.0;
       
       // 1. Zone Géo (Adapté pour liste de continents)
-      if (!_matchesContinent(dest, preferences.selectedContinents)) continue;
+      if (!_matchesContinent(dest, preferences.selectedContinents)) {
+        penalty += 100.0; // Pénalité forte mais pas excluante
+      }
       
       // 2. Type de voyage (Solo, Couple, Famille)
-      if (!_matchesTravelType(dest, preferences.travelers)) continue;
+      if (!_matchesTravelType(dest, preferences.travelers)) {
+        penalty += 50.0;
+      }
 
       // 3. Climat (Simplifié pour l'instant)
-      // if (!_isClimateGood(dest, preferences.prefJaugeClimat, targetMonth)) continue;
+      // if (!_isClimateGood(dest, preferences.prefJaugeClimat, targetMonth)) penalty += 20.0;
       
       // --- Étape C : Validation Budgétaire (Estimation) ---
       double estimatedCost = _calculateCost(dest, preferences, adjustedMonth);
@@ -57,23 +62,28 @@ class RecommendationService {
       double? maxBudgetPerPerson = _mapBudgetLevelToAmount(preferences.budgetLevel);
       
       // Si maxBudget est null (illimité) ou si le coût est dans la tolérance (+20%)
-      if (maxBudgetPerPerson != null && costPerPerson > maxBudgetPerPerson * 1.2) continue;
+      if (maxBudgetPerPerson != null && costPerPerson > maxBudgetPerPerson * 1.2) {
+        penalty += 80.0; // Pénalité budget
+      }
 
       // --- Étape B : Calcul du Score de Compatibilité ---
       double similarityScore = _calculateSimilarity(vectorUser, dest);
       
+      // Application de la pénalité
+      double finalScore = similarityScore - penalty;
+      
       // Boost Score si c'est un favori archivé (TODO: intégrer UserInformations)
       // if (userInfo.favorites.contains(dest.id)) score *= 1.5;
 
-      candidates.add(ScoredDestination(dest, similarityScore, estimatedCost));
+      candidates.add(ScoredDestination(dest, finalScore, estimatedCost));
     }
 
     // 4. Tri et Renvoi
     // On trie par score décroissant
     candidates.sort((a, b) => b.score.compareTo(a.score));
     
-    // On retourne les destinations brutes
-    return candidates.map((e) => e.destination).toList();
+    // On retourne les destinations brutes (Top N)
+    return candidates.take(limit).map((e) => e.destination).toList();
   }
 
   /// Crée un vecteur utilisateur basé sur les réponses au questionnaire

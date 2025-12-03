@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
 import '../models/destination_model.dart';
+import '../models/activity_model.dart';
 import 'database_service.dart';
 
 class DataLoaderService {
@@ -17,38 +18,61 @@ class DataLoaderService {
   Future<void> loadInitialData() async {
     final db = DatabaseService();
 
-    // Vérifie si les données sont déjà chargées
+    // --- 1. Destinations ---
     final existingDestinations = await db.getAllDestinations();
     
-    // Vérification si une mise à jour des données est nécessaire (ex: nouvelle colonne monthlyFlightPrices vide)
+    // Vérification si une mise à jour des données est nécessaire
     bool needsUpdate = false;
     if (existingDestinations.isNotEmpty) {
-      // Si la première destination n'a pas de prix de vols (alors qu'on vient d'ajouter la feature), on recharge
-      // Note: On pourrait aussi vérifier d'autres champs si besoin
       if (existingDestinations.first.monthlyFlightPrices == null || existingDestinations.first.monthlyFlightPrices!.isEmpty) {
         needsUpdate = true;
       }
     }
 
-    if (existingDestinations.isNotEmpty && !needsUpdate) {
+    if (existingDestinations.isEmpty || needsUpdate) {
+      if (needsUpdate) {
+        print('🔄 Mise à jour des données nécessaire (nouvelles colonnes/données)...');
+        await db.clearDestinations();
+        await db.clearActivities();
+      }
+
+      print('📦 Chargement des destinations depuis les CSV...');
+      final destinations = await _loadDestinationsFromCsv();
+
+      for (final destination in destinations) {
+        await db.insertDestination(destination);
+      }
+      print('✅ ${destinations.length} destinations chargées en base');
+    } else {
       print('✅ ${existingDestinations.length} destinations déjà en base');
-      return;
     }
 
-    if (needsUpdate) {
-      print('🔄 Mise à jour des données nécessaire (nouvelles colonnes/données)...');
-      await db.clearDestinations();
+    // --- 2. Activités ---
+    bool activitiesLoaded = false;
+    // On vérifie s'il y a des activités en base (via la première destination trouvée)
+    String? checkCity;
+    if (existingDestinations.isNotEmpty) {
+      checkCity = existingDestinations.first.name;
+    } else {
+      // Si on vient de charger, on récupère la liste fraîche
+      final newDestinations = await db.getAllDestinations();
+      if (newDestinations.isNotEmpty) {
+        checkCity = newDestinations.first.name;
+      }
     }
 
-    print('📦 Chargement des destinations depuis les CSV...');
-    final destinations = await _loadDestinationsFromCsv();
-
-    for (final destination in destinations) {
-      await db.insertDestination(destination);
-      // print('  ✓ ${destination.name} ajoutée');
+    if (checkCity != null) {
+       final acts = await db.getActivitiesForDestination(checkCity);
+       if (acts.isNotEmpty) {
+         activitiesLoaded = true;
+       }
     }
-
-    print('✅ ${destinations.length} destinations chargées en base');
+    
+    if (needsUpdate || !activitiesLoaded) {
+       print('📦 Chargement des activités depuis le CSV...');
+       await _loadActivitiesFromCsv(db);
+       print('✅ Activités chargées en base');
+    }
   }
 
   Future<List<Destination>> _loadDestinationsFromCsv() async {
@@ -337,5 +361,116 @@ class DataLoaderService {
       print(stackTrace);
       return [];
     }
+  }
+
+  Future<void> _loadActivitiesFromCsv(DatabaseService db) async {
+    try {
+      final String csvData = await rootBundle.loadString('assets/data/activities.csv');
+      // On découpe manuellement car le format peut être complexe
+      List<String> lines = LineSplitter.split(csvData).toList();
+
+      // Ignorer l'en-tête
+      if (lines.isNotEmpty) lines.removeAt(0);
+
+      int count = 0;
+      for (String line in lines) {
+        if (line.trim().isEmpty) continue;
+        Activity? activity = _parseActivityLine(line);
+        if (activity != null) {
+          await db.insertActivity(activity);
+          count++;
+        }
+      }
+      print('  ✓ $count activités insérées');
+    } catch (e) {
+      print('❌ Erreur chargement activités: $e');
+    }
+  }
+
+  Activity? _parseActivityLine(String line) {
+    try {
+      List<String> parts = _parseCSVLine(line);
+      if (parts.length < 14) return null;
+
+      String categoriesJson = parts[1];
+      String city = parts[2].trim();
+      String country = parts[3].trim();
+      double latitude = double.tryParse(parts[9]) ?? 0.0;
+      double longitude = double.tryParse(parts[10]) ?? 0.0;
+      String name = parts[11].trim();
+      double rating = double.tryParse(parts[12]) ?? 0.0;
+      String typesJson = parts[13];
+
+      List<String> categories = _parseJsonArray(categoriesJson);
+      List<String> types = _parseJsonArray(typesJson);
+      
+      bool hasFee = types.contains('fee');
+      bool hasWheelchair = types.contains('wheelchair') && types.contains('wheelchair.yes');
+
+      return Activity(
+        name: name,
+        city: city,
+        country: country,
+        latitude: latitude,
+        longitude: longitude,
+        categories: categories,
+        rating: rating,
+        hasFee: hasFee,
+        hasWheelchair: hasWheelchair,
+      );
+    } catch (e) {
+      // print('Erreur parsing ligne activité: $e');
+      return null;
+    }
+  }
+
+  List<String> _parseCSVLine(String line) {
+    List<String> result = [];
+    bool inQuotes = false;
+    StringBuffer buffer = StringBuffer();
+
+    for (int i = 0; i < line.length; i++) {
+      String char = line[i];
+
+      if (char == '"') {
+        if (i + 1 < line.length && line[i + 1] == '"') {
+          buffer.write('"');
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char == ',' && !inQuotes) {
+        result.add(buffer.toString());
+        buffer.clear();
+      } else {
+        buffer.write(char);
+      }
+    }
+    result.add(buffer.toString());
+    return result;
+  }
+
+  List<String> _parseJsonArray(String jsonString) {
+    try {
+      String cleaned = jsonString.trim();
+      if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+        cleaned = cleaned.substring(1, cleaned.length - 1);
+      }
+      cleaned = cleaned.replaceAll('""', '"');
+      
+      // Si c'est un format Python ['a', 'b']
+      cleaned = cleaned.replaceAll("'", '"');
+      
+      var decoded = jsonDecode(cleaned);
+      if (decoded is List) {
+        return decoded.map((e) => e.toString()).toList();
+      }
+    } catch (e) {
+      // Fallback simple
+      if (jsonString.contains(',')) {
+        return jsonString.split(',').map((e) => e.trim().replaceAll(RegExp(r"['\[\]]"), "")).toList();
+      }
+    }
+    return [];
   }
 }

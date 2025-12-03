@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/destination_model.dart';
 import '../models/user_interaction_model.dart';
+import '../models/activity_model.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -53,7 +54,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       // onCreate n'est appelé que si la base est créée par openDatabase (donc vide)
       // Si on a copié le fichier, onCreate ne sera PAS appelé, ce qui est ce qu'on veut.
       onCreate: _createTables,
@@ -67,6 +68,8 @@ class DatabaseService {
       // Stratégie simple : Supprimer et recréer la table destinations. 
       // Ceci est justifié ici car nous savons que la structure a changé.
       await db.execute('DROP TABLE IF EXISTS destinations');
+      // Pour la version 7, on recrée aussi la table activities si elle existait (peu probable)
+      await db.execute('DROP TABLE IF EXISTS activities');
       await _createTables(db, newVersion);
       print('🔄 Base de données mise à jour vers la version $newVersion');
     }
@@ -112,6 +115,22 @@ class DatabaseService {
         type TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         durationMs INTEGER NOT NULL
+      )
+    ''');
+
+    // ✅ Création de la table activities (Version 7)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS activities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        city TEXT NOT NULL,
+        country TEXT NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        categories TEXT NOT NULL,
+        rating REAL NOT NULL,
+        hasFee INTEGER NOT NULL,
+        hasWheelchair INTEGER NOT NULL
       )
     ''');
     
@@ -326,5 +345,36 @@ class DatabaseService {
     final db = await database;
     final result = await db.rawQuery('SELECT COUNT(*) as count FROM destinations');
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ✅ Ajouter une activité
+  Future<void> insertActivity(Activity activity) async {
+    final db = await database;
+    await db.insert(
+      'activities',
+      activity.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // ✅ Récupérer les activités pour une destination (ville)
+  Future<List<Activity>> getActivitiesForDestination(String city) async {
+    final db = await database;
+    final maps = await db.query(
+      'activities',
+      where: 'city = ?',
+      whereArgs: [city],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Activity.fromMap(maps[i]);
+    });
+  }
+
+  // ✅ Vider la table activities
+  Future<void> clearActivities() async {
+    final db = await database;
+    await db.delete('activities');
+    print('🗑️ Table activities vidée');
   }
 }
