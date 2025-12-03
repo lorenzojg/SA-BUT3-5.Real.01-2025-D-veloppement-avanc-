@@ -2,6 +2,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
 import '../models/destination_model.dart';
 import 'database_service.dart';
+import 'activity_analyzer_service.dart';
 
 class DataLoaderService {
   static final DataLoaderService _instance = DataLoaderService._internal();
@@ -32,18 +33,34 @@ class DataLoaderService {
     }
 
     print('✅ ${destinations.length} destinations chargées en base');
+
+    // Charger aussi les données d'activités pour l'analyseur
+    print('📦 Chargement des données d\'activités et de prix...');
+    await ActivityAnalyzerService().loadActivities();
+    await ActivityAnalyzerService().loadPrices();
+    print('✅ Données d\'activités et de prix chargées');
   }
 
   Future<List<Destination>> _loadDestinationsFromCsv() async {
     try {
       // 1. Load Worldwide Dataset (Base)
-      final String worldwideData = await rootBundle.loadString('assets/data/Worldwide_Travel_Cities_Dataset_Ratings_and_Climate.csv');
-      List<List<dynamic>> worldwideRows = const CsvToListConverter().convert(worldwideData, eol: '\n');
+      final String worldwideData = await rootBundle.loadString(
+        'assets/data/Worldwide_Travel_Cities_Dataset_Ratings_and_Climate.csv',
+      );
+      List<List<dynamic>> worldwideRows = const CsvToListConverter().convert(
+        worldwideData,
+        eol: '\n',
+      );
 
       // 2. Load City Data (Enrichment)
-      final String cityData = await rootBundle.loadString('assets/data/city_data.csv');
-      List<List<dynamic>> cityRows = const CsvToListConverter().convert(cityData, eol: '\n');
-      
+      final String cityData = await rootBundle.loadString(
+        'assets/data/city_data.csv',
+      );
+      List<List<dynamic>> cityRows = const CsvToListConverter().convert(
+        cityData,
+        eol: '\n',
+      );
+
       // Map city_data by City Name
       Map<String, Map<String, dynamic>> cityDataMap = {};
       for (var i = 1; i < cityRows.length; i++) {
@@ -58,9 +75,14 @@ class DataLoaderService {
       }
 
       // 3. Load Prix Moyens (Enrichment)
-      final String prixData = await rootBundle.loadString('assets/data/prixMoyens.csv');
-      List<List<dynamic>> prixRows = const CsvToListConverter().convert(prixData, eol: '\n');
-      
+      final String prixData = await rootBundle.loadString(
+        'assets/data/prixMoyens.csv',
+      );
+      List<List<dynamic>> prixRows = const CsvToListConverter().convert(
+        prixData,
+        eol: '\n',
+      );
+
       Map<String, double> countryCostMap = {};
       for (var i = 1; i < prixRows.length; i++) {
         var row = prixRows[i];
@@ -73,19 +95,48 @@ class DataLoaderService {
       }
 
       Map<String, String> countryEnToFr = {
-        'Italy': 'Italie', 'Fiji': 'Iles Fidji', 'Canada': 'Canada', 'Mexico': 'Mexique',
-        'Indonesia': 'Indonésie', 'Greenland': 'Groenland', 'Namibia': 'Namibie',
-        'Jamaica': 'Jamaïque', 'Greece': 'Grèce', 'Georgia': 'Géorgie', 'Germany': 'Allemagne',
-        'Australia': 'Australie', 'Japan': 'Japon', 'Netherlands': 'Pays-Bas',
-        'Myanmar': 'Birmanie', 'Sweden': 'Suède', 'United States': 'Etats-Unis',
-        'France': 'France', 'Spain': 'Espagne', 'United Kingdom': 'Royaume Uni',
-        'Thailand': 'Thaïlande', 'Vietnam': 'Vietnam', 'India': 'Inde', 'China': 'Chine',
-        'Brazil': 'Brésil', 'Argentina': 'Argentine', 'Peru': 'Pérou',
-        'South Africa': 'Afrique du Sud', 'Egypt': 'Egypte', 'Morocco': 'Maroc',
-        'Turkey': 'Turquie', 'Russia': 'Russie', 'Portugal': 'Portugal',
-        'Switzerland': 'Suisse', 'Austria': 'Autriche', 'Belgium': 'Belgique',
-        'Ireland': 'Irlande', 'Norway': 'Norvège', 'Denmark': 'Danemark',
-        'Finland': 'Finlande', 'Iceland': 'Islande', 'New Zealand': 'Nouvelle Zélande',
+        'Italy': 'Italie',
+        'Fiji': 'Iles Fidji',
+        'Canada': 'Canada',
+        'Mexico': 'Mexique',
+        'Indonesia': 'Indonésie',
+        'Greenland': 'Groenland',
+        'Namibia': 'Namibie',
+        'Jamaica': 'Jamaïque',
+        'Greece': 'Grèce',
+        'Georgia': 'Géorgie',
+        'Germany': 'Allemagne',
+        'Australia': 'Australie',
+        'Japan': 'Japon',
+        'Netherlands': 'Pays-Bas',
+        'Myanmar': 'Birmanie',
+        'Sweden': 'Suède',
+        'United States': 'Etats-Unis',
+        'France': 'France',
+        'Spain': 'Espagne',
+        'United Kingdom': 'Royaume Uni',
+        'Thailand': 'Thaïlande',
+        'Vietnam': 'Vietnam',
+        'India': 'Inde',
+        'China': 'Chine',
+        'Brazil': 'Brésil',
+        'Argentina': 'Argentine',
+        'Peru': 'Pérou',
+        'South Africa': 'Afrique du Sud',
+        'Egypt': 'Egypte',
+        'Morocco': 'Maroc',
+        'Turkey': 'Turquie',
+        'Russia': 'Russie',
+        'Portugal': 'Portugal',
+        'Switzerland': 'Suisse',
+        'Austria': 'Autriche',
+        'Belgium': 'Belgique',
+        'Ireland': 'Irlande',
+        'Norway': 'Norvège',
+        'Denmark': 'Danemark',
+        'Finland': 'Finlande',
+        'Iceland': 'Islande',
+        'New Zealand': 'Nouvelle Zélande',
       };
 
       List<Destination> destinations = [];
@@ -101,7 +152,7 @@ class DataLoaderService {
         String description = row[4].toString();
         double latitude = double.tryParse(row[5].toString()) ?? 0.0;
         double longitude = double.tryParse(row[6].toString()) ?? 0.0;
-        
+
         String idealDurationsRaw = row[8].toString();
         int duration = 7;
         if (idealDurationsRaw.contains('Weekend')) duration = 3;
@@ -109,7 +160,7 @@ class DataLoaderService {
         if (idealDurationsRaw.contains('Long trip')) duration = 14;
 
         String budgetLevel = row[9].toString();
-        
+
         double scoreCulture = (double.tryParse(row[10].toString()) ?? 0.0);
         double scoreAdventure = (double.tryParse(row[11].toString()) ?? 0.0);
         double scoreNature = (double.tryParse(row[12].toString()) ?? 0.0);
@@ -128,13 +179,17 @@ class DataLoaderService {
         if (cityExtra != null) {
           climate = cityExtra['climat_details'].toString();
           if (climate.length > 100) climate = "${climate.substring(0, 100)}...";
-          
+
           String tagsRaw = cityExtra['tags'].toString();
-          tagsRaw = tagsRaw.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '');
+          tagsRaw = tagsRaw
+              .replaceAll('[', '')
+              .replaceAll(']', '')
+              .replaceAll('"', '');
           if (tagsRaw.isNotEmpty) {
             activities = tagsRaw.split(',').map((e) => e.trim()).toList();
           }
-          cityCost = double.tryParse(cityExtra['hebergement_moyen'].toString()) ?? 0.0;
+          cityCost =
+              double.tryParse(cityExtra['hebergement_moyen'].toString()) ?? 0.0;
         }
 
         double countryCost = 0.0;
@@ -149,8 +204,10 @@ class DataLoaderService {
         } else {
           if (budgetLevel == 'Luxury') {
             averageCost = 300.0;
-          } else if (budgetLevel == 'Mid-range') averageCost = 150.0;
-          else averageCost = 80.0;
+          } else if (budgetLevel == 'Mid-range')
+            averageCost = 150.0;
+          else
+            averageCost = 80.0;
         }
 
         int activityScore = (scoreAdventure * 20).toInt();
@@ -163,33 +220,35 @@ class DataLoaderService {
           if (activities.isEmpty) activities.add("Tourisme");
         }
 
-        destinations.add(Destination(
-          id: id,
-          name: name,
-          country: country,
-          continent: continent,
-          latitude: latitude,
-          longitude: longitude,
-          activities: activities,
-          averageCost: averageCost,
-          climate: climate,
-          duration: duration,
-          description: description,
-          travelTypes: [budgetLevel],
-          rating: 4.5,
-          annualVisitors: 100000,
-          unescoSite: false,
-          activityScore: activityScore,
-          scoreCulture: scoreCulture,
-          scoreAdventure: scoreAdventure,
-          scoreNature: scoreNature,
-          scoreBeaches: scoreBeaches,
-          scoreNightlife: scoreNightlife,
-          scoreCuisine: scoreCuisine,
-          scoreWellness: scoreWellness,
-          scoreUrban: scoreUrban,
-          scoreSeclusion: scoreSeclusion,
-        ));
+        destinations.add(
+          Destination(
+            id: id,
+            name: name,
+            country: country,
+            continent: continent,
+            latitude: latitude,
+            longitude: longitude,
+            activities: activities,
+            averageCost: averageCost,
+            climate: climate,
+            duration: duration,
+            description: description,
+            travelTypes: [budgetLevel],
+            rating: 4.5,
+            annualVisitors: 100000,
+            unescoSite: false,
+            activityScore: activityScore,
+            scoreCulture: scoreCulture,
+            scoreAdventure: scoreAdventure,
+            scoreNature: scoreNature,
+            scoreBeaches: scoreBeaches,
+            scoreNightlife: scoreNightlife,
+            scoreCuisine: scoreCuisine,
+            scoreWellness: scoreWellness,
+            scoreUrban: scoreUrban,
+            scoreSeclusion: scoreSeclusion,
+          ),
+        );
       }
 
       return destinations;
