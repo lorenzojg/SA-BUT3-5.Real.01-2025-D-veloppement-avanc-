@@ -17,6 +17,17 @@ class Destination {
   final double annualVisitors;     // ✅ Nouveau - Visiteurs annuels (en millions)
   final bool unescoSite;           // ✅ Nouveau - Site UNESCO ou non
 
+  // Scores vectoriels pour l'algorithme de recommandation (0.0 à 1.0 ou 0 à 10)
+  final double scoreCulture;
+  final double scoreAdventure;
+  final double scoreNature;
+  final double scoreBeaches;
+  final double scoreNightlife;
+  final double scoreCuisine;
+  final double scoreWellness;
+  final double scoreUrban;
+  final double scoreSeclusion;
+
   Destination({
     required this.id,
     required this.name,
@@ -33,6 +44,16 @@ class Destination {
     required this.rating,
     required this.annualVisitors,
     required this.unescoSite,
+    // Valeurs par défaut à 0.0 si non fournies (pour compatibilité)
+    this.scoreCulture = 0.0,
+    this.scoreAdventure = 0.0,
+    this.scoreNature = 0.0,
+    this.scoreBeaches = 0.0,
+    this.scoreNightlife = 0.0,
+    this.scoreCuisine = 0.0,
+    this.scoreWellness = 0.0,
+    this.scoreUrban = 0.0,
+    this.scoreSeclusion = 0.0,
   });
 
   // Convertir depuis JSON (important pour charger les données embarquées)
@@ -57,6 +78,16 @@ class Destination {
       rating: (json['rating'] ?? 4.0).toDouble(),
       annualVisitors: (json['annualVisitors'] ?? 1.0).toDouble(),
       unescoSite: json['unescoSite'] ?? false,
+      // Mapping des scores vectoriels
+      scoreCulture: (json['scoreCulture'] ?? 0.0).toDouble(),
+      scoreAdventure: (json['scoreAdventure'] ?? 0.0).toDouble(),
+      scoreNature: (json['scoreNature'] ?? 0.0).toDouble(),
+      scoreBeaches: (json['scoreBeaches'] ?? 0.0).toDouble(),
+      scoreNightlife: (json['scoreNightlife'] ?? 0.0).toDouble(),
+      scoreCuisine: (json['scoreCuisine'] ?? 0.0).toDouble(),
+      scoreWellness: (json['scoreWellness'] ?? 0.0).toDouble(),
+      scoreUrban: (json['scoreUrban'] ?? 0.0).toDouble(),
+      scoreSeclusion: (json['scoreSeclusion'] ?? 0.0).toDouble(),
     );
   }
 
@@ -78,6 +109,15 @@ class Destination {
       'rating': rating,
       'annualVisitors': annualVisitors,
       'unescoSite': unescoSite,
+      'scoreCulture': scoreCulture,
+      'scoreAdventure': scoreAdventure,
+      'scoreNature': scoreNature,
+      'scoreBeaches': scoreBeaches,
+      'scoreNightlife': scoreNightlife,
+      'scoreCuisine': scoreCuisine,
+      'scoreWellness': scoreWellness,
+      'scoreUrban': scoreUrban,
+      'scoreSeclusion': scoreSeclusion,
     };
   }
 

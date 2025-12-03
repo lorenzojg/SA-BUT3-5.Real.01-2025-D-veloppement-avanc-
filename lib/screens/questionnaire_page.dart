@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
 import '../services/database_service.dart';
 import 'recommendations_page.dart';
-
+import 'WorldMap.dart'; // <--- 1. IMPORTER LA CARTE
 
 class QuestionnairePage extends StatefulWidget {
   const QuestionnairePage({super.key});
@@ -17,6 +17,10 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   final UserPreferences userPreferences = UserPreferences();
   final DatabaseService _dbService = DatabaseService();
 
+  // Pour stocker temporairement la sélection de la carte (qui est une liste)
+  // avant de la convertir en String pour ton modèle actuel.
+  List<WorldRegion> _tempSelectedRegions = [];
+
   void _selectAnswer(String answer) {
     setState(() {
       userPreferences.setAnswer(currentQuestionIndex, answer);
@@ -27,6 +31,7 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
     if (currentQuestionIndex < questions.length - 1) {
       setState(() {
         currentQuestionIndex++;
+        _tempSelectedRegions = []; // Reset pour la prochaine question
       });
     } else {
       await _saveUserPreferences();
@@ -35,12 +40,11 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   }
 
   Future<void> _saveUserPreferences() async {
-    // Enregistrer les préférences de l'utilisateur
     print('💾 Préférences sauvegardées');
+    // _dbService.save(...)
   }
 
   void _showResults() {
-    // ✅ Naviguer vers la page de recommandations
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -60,14 +64,21 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
       backgroundColor: const Color(0xFF1a3a52),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(40.0),
+          padding: const EdgeInsets.all(20.0), // J'ai réduit un peu le padding pour laisser place à la carte
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _buildQuestionTitle(currentQuestion),
-              const SizedBox(height: 30),
-              _buildOptionsContainer(currentQuestion, selectedAnswer),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
+              
+              // Le contenu principal change si c'est une carte ou du texte
+              Expanded(
+                child: Center(
+                  child: _buildOptionsContainer(currentQuestion, selectedAnswer),
+                ),
+              ),
+              
+              const SizedBox(height: 20),
               _buildNextButton(selectedAnswer),
               const SizedBox(height: 20),
               _buildProgressIndicator(),
@@ -84,38 +95,105 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
       textAlign: TextAlign.center,
       style: const TextStyle(
         color: Colors.white,
-        fontSize: 18,
-        fontWeight: FontWeight.w300,
-        height: 1.6,
+        fontSize: 22, // Un peu plus grand pour le titre
+        fontWeight: FontWeight.bold,
+        height: 1.3,
       ),
     );
   }
 
   Widget _buildOptionsContainer(Question question, String? selectedAnswer) {
+    // <--- 2. LOGIQUE DE DÉTECTION
+    // Ici, on doit savoir si c'est la question "Carte".
+    // Option A : Tu ajoutes un champ 'type' dans ton modèle Question.
+    // Option B (Utilisée ici) : On vérifie si le titre contient "monde" ou "destination".
+    // Adapter cette condition selon le vrai titre de ta question dans QuestionnaireData.
+    bool isMapQuestion = question.title.toLowerCase().contains("destination") || 
+                         question.title.toLowerCase().contains("monde");
+
     return Container(
-      padding: const EdgeInsets.all(30),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        children: [
-          if (question.subtitle != null) ...[
-            Text(
-              question.subtitle!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-              ),
+      child: isMapQuestion 
+        ? _buildMapContent() // Affiche la carte
+        : _buildStandardOptions(question, selectedAnswer), // Affiche les boutons classiques
+    );
+  }
+
+  // <--- 3. LE WIDGET CARTE INTÉGRÉ
+  Widget _buildMapContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min, // S'adapte au contenu
+      children: [
+        const Text(
+          "Touchez les zones sur la carte",
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        const SizedBox(height: 15),
+        // On donne une taille fixe à la carte pour qu'elle s'affiche bien dans la colonne
+        SizedBox(
+          height: 300, // Ajuste la hauteur selon tes besoins
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            // On enveloppe la carte dans un container blanc ou transparent selon tes gouts
+            // Ici je mets un fond transparent pour qu'on voit juste les pays
+            child: WorldMapSelector(
+              onRegionsChanged: (regions) {
+                setState(() {
+                  _tempSelectedRegions = regions;
+                  
+                  // CONVERSION : Ta méthode _selectAnswer attend un String.
+                  // On transforme la liste de régions en String (ex: "Europe,Asie").
+                  // Si la liste est vide, on passe null ou chaine vide.
+                  if (regions.isEmpty) {
+                    _selectAnswer(""); // ou gérer le null
+                  } else {
+                    String result = regions.map((e) => e.name).join(',');
+                    _selectAnswer(result);
+                  }
+                });
+              },
             ),
-            const SizedBox(height: 20),
-          ],
-          ...question.options.map(
-                (option) => _buildOptionButton(option, selectedAnswer),
           ),
+        ),
+        const SizedBox(height: 10),
+        // Petit feedback textuel
+        if (_tempSelectedRegions.isNotEmpty)
+          Text(
+            "Sélection : ${_tempSelectedRegions.map((e) => e.name).join(', ')}", // Affiche proprement les noms
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+      ],
+    );
+  }
+
+  // J'ai extrait l'ancien contenu de _buildOptionsContainer ici pour plus de clarté
+  Widget _buildStandardOptions(Question question, String? selectedAnswer) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (question.subtitle != null) ...[
+          Text(
+            question.subtitle!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
-      ),
+        // Génère la liste des boutons
+        ...question.options.map(
+          (option) => _buildOptionButton(option, selectedAnswer),
+        ),
+      ],
     );
   }
 
@@ -153,8 +231,11 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   }
 
   Widget _buildNextButton(String? selectedAnswer) {
+    // Le bouton est activé si selectedAnswer n'est pas null et n'est pas vide
+    bool isEnabled = selectedAnswer != null && selectedAnswer.isNotEmpty;
+
     return ElevatedButton(
-      onPressed: selectedAnswer != null ? _nextQuestion : null,
+      onPressed: isEnabled ? _nextQuestion : null,
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1a3a52),
@@ -163,7 +244,7 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
           borderRadius: BorderRadius.circular(30),
         ),
         elevation: 4,
-        disabledBackgroundColor: Colors.white.withOpacity(0.5),
+        disabledBackgroundColor: Colors.white.withOpacity(0.3), // Plus joli désactivé
       ),
       child: Text(
         currentQuestionIndex == questions.length - 1 ? 'Terminer' : 'Suivant',

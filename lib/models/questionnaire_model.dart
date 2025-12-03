@@ -25,7 +25,7 @@ class QuestionnaireData {
         ],
       ),
       Question(
-        title: 'Avez-vous un continent de\npréférence ?',
+        title: 'Quelle est ta destination ?',
         options: [
           'Europe',
           'Afrique',
@@ -85,6 +85,20 @@ class UserPreferences {
         return null;
     }
   }
+
+  // --- Nouveaux champs pour l'algorithme avancé ---
+  // Ces valeurs seraient idéalement remplies par des questions supplémentaires
+  // ou déduites. Pour l'instant, on peut imaginer des valeurs par défaut ou
+  // étendre le questionnaire plus tard.
+
+  // Préférence Ville vs Nature (0.0 = 100% Nature, 1.0 = 100% Urbain)
+  double prefJaugeVille = 0.5;
+
+  // Préférence Chill vs Actif (0.0 = 100% Chill, 1.0 = 100% Actif)
+  double prefJaugeSedentarite = 0.5;
+
+  // Préférence Climat (Seuil de température min acceptable, ex: 15°C)
+  double prefJaugeClimat = 15.0;
 
   @override
   String toString() {
