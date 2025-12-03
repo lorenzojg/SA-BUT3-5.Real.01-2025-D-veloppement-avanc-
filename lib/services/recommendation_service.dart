@@ -26,7 +26,8 @@ class RecommendationService {
     List<ScoredDestination> candidates = [];
     
     // Date de voyage (mois prochain par défaut si non spécifié)
-    // final int targetMonth = travelMonth ?? DateTime.now().month + 1;
+    final int targetMonth = travelMonth ?? (DateTime.now().month + 1);
+    final int adjustedMonth = targetMonth > 12 ? targetMonth - 12 : targetMonth;
 
     for (var dest in allDestinations) {
       
@@ -42,7 +43,7 @@ class RecommendationService {
       // if (!_isClimateGood(dest, preferences.prefJaugeClimat, targetMonth)) continue;
       
       // --- Étape C : Validation Budgétaire (Estimation) ---
-      double estimatedCost = _calculateCost(dest, preferences);
+      double estimatedCost = _calculateCost(dest, preferences, adjustedMonth);
       
       // Calcul du nombre de voyageurs pour ramener le coût par personne
       int travelersCount = 1;
@@ -139,7 +140,7 @@ class RecommendationService {
   }
 
   /// Estime le coût total du voyage
-  static double _calculateCost(Destination dest, UserPreferences prefs) {
+  static double _calculateCost(Destination dest, UserPreferences prefs, int month) {
     // Hypothèses simplifiées
     int durationDays = 7; // Durée standard
     int travelersCount = 1;
@@ -151,10 +152,18 @@ class RecommendationService {
     // Note: averageCost est souvent par personne par jour
     double livingCost = (dest.averageCost * durationDays) * travelersCount;
     
-    // Coût Vol (Estimation grossière car on n'a pas encore la DB vols connectée ici)
-    // On pourrait utiliser une moyenne basée sur la distance/continent
+    // Coût Vol
     double flightCostPerPerson = 500.0; // Valeur par défaut
-    if (dest.continent != 'Europe') flightCostPerPerson = 1000.0;
+
+    // Utilisation des prix mensuels si disponibles
+    if (dest.monthlyFlightPrices != null && dest.monthlyFlightPrices!.isNotEmpty) {
+      // month est 1-12, l'index est 0-11
+      int index = (month - 1).clamp(0, 11);
+      flightCostPerPerson = dest.monthlyFlightPrices![index].toDouble();
+    } else {
+      // Fallback si pas de données précises
+      if (dest.continent != 'Europe') flightCostPerPerson = 1000.0;
+    }
     
     double totalFlightCost = flightCostPerPerson * travelersCount;
 

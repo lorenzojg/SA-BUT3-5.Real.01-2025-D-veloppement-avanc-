@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -52,7 +53,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       // onCreate n'est appelé que si la base est créée par openDatabase (donc vide)
       // Si on a copié le fichier, onCreate ne sera PAS appelé, ce qui est ce qu'on veut.
       onCreate: _createTables,
@@ -98,7 +99,8 @@ class DatabaseService {
         scoreCuisine REAL DEFAULT 0.0,
         scoreWellness REAL DEFAULT 0.0,
         scoreUrban REAL DEFAULT 0.0,
-        scoreSeclusion REAL DEFAULT 0.0
+        scoreSeclusion REAL DEFAULT 0.0,
+        monthlyFlightPrices TEXT
       )
     ''');
     
@@ -147,6 +149,7 @@ class DatabaseService {
         'scoreWellness': destination.scoreWellness,
         'scoreUrban': destination.scoreUrban,
         'scoreSeclusion': destination.scoreSeclusion,
+        'monthlyFlightPrices': destination.monthlyFlightPrices != null ? jsonEncode(destination.monthlyFlightPrices) : null,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -189,6 +192,9 @@ class DatabaseService {
         scoreWellness: (map['scoreWellness'] as num? ?? 0.0).toDouble(),
         scoreUrban: (map['scoreUrban'] as num? ?? 0.0).toDouble(),
         scoreSeclusion: (map['scoreSeclusion'] as num? ?? 0.0).toDouble(),
+        monthlyFlightPrices: map['monthlyFlightPrices'] != null 
+            ? List<int>.from(jsonDecode(map['monthlyFlightPrices'] as String)) 
+            : null,
       );
     });
   }
@@ -235,6 +241,9 @@ class DatabaseService {
       scoreWellness: (map['scoreWellness'] as num? ?? 0.0).toDouble(),
       scoreUrban: (map['scoreUrban'] as num? ?? 0.0).toDouble(),
       scoreSeclusion: (map['scoreSeclusion'] as num? ?? 0.0).toDouble(),
+      monthlyFlightPrices: map['monthlyFlightPrices'] != null 
+          ? List<int>.from(jsonDecode(map['monthlyFlightPrices'] as String)) 
+          : null,
     );
   }
 
@@ -277,6 +286,9 @@ class DatabaseService {
         scoreWellness: (map['scoreWellness'] as num? ?? 0.0).toDouble(),
         scoreUrban: (map['scoreUrban'] as num? ?? 0.0).toDouble(),
         scoreSeclusion: (map['scoreSeclusion'] as num? ?? 0.0).toDouble(),
+        monthlyFlightPrices: map['monthlyFlightPrices'] != null 
+            ? List<int>.from(jsonDecode(map['monthlyFlightPrices'] as String)) 
+            : null,
       );
     });
   }
