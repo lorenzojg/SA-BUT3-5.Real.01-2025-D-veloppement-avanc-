@@ -127,7 +127,7 @@ class DataLoaderService {
 
         if (cityExtra != null) {
           climate = cityExtra['climat_details'].toString();
-          if (climate.length > 100) climate = climate.substring(0, 100) + "...";
+          if (climate.length > 100) climate = "${climate.substring(0, 100)}...";
           
           String tagsRaw = cityExtra['tags'].toString();
           tagsRaw = tagsRaw.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '');
@@ -147,8 +147,9 @@ class DataLoaderService {
         } else if (countryCost > 0) {
           averageCost = countryCost / 7;
         } else {
-          if (budgetLevel == 'Luxury') averageCost = 300.0;
-          else if (budgetLevel == 'Mid-range') averageCost = 150.0;
+          if (budgetLevel == 'Luxury') {
+            averageCost = 300.0;
+          } else if (budgetLevel == 'Mid-range') averageCost = 150.0;
           else averageCost = 80.0;
         }
 

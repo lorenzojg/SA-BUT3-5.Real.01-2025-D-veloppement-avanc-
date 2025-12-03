@@ -21,7 +21,7 @@ class RecommendationService {
     
     // 1. Initialiser le profil vectoriel de l'utilisateur
     // Si un profil courant (appris) est fourni, on l'utilise, sinon on le crée depuis les préférences
-    UserProfileVector vectorUser = currentProfile ?? _createVectorFromPreferences(preferences);
+    UserProfileVector vectorUser = currentProfile ?? createVectorFromPreferences(preferences);
     
     List<ScoredDestination> candidates = [];
     
@@ -76,7 +76,7 @@ class RecommendationService {
   }
 
   /// Crée un vecteur utilisateur basé sur les réponses au questionnaire
-  static UserProfileVector _createVectorFromPreferences(UserPreferences prefs) {
+  static UserProfileVector createVectorFromPreferences(UserPreferences prefs) {
     UserProfileVector vector = UserProfileVector();
 
     // --- 1. Impact de la jauge Ville vs Nature ---

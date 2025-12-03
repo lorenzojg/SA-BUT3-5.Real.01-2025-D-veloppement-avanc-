@@ -1,9 +1,13 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
 import '../models/questionnaire_model.dart';
+import '../models/user_interaction_model.dart';
+import '../models/user_profile_vector.dart';
 import '../services/database_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/favorites_service.dart';
+import '../services/user_interaction_service.dart';
 import 'contact_page.dart';
 import 'about_page.dart';
 import 'reset_preferences_page.dart';
@@ -25,17 +29,44 @@ class RecommendationsPage extends StatefulWidget {
 class _RecommendationsPageState extends State<RecommendationsPage> {
   final DatabaseService _dbService = DatabaseService();
   final FavoritesService _favoritesService = FavoritesService();
-  List<Destination> _destinations = [];
-  bool _isLoading = true;
-  Map<String, dynamic>? _stats;
+
   List<Destination> _allDestinations = [];
+  List<Destination> _destinations = []; // ordered recommendations
+  
+  // Profil utilisateur dynamique (évolue avec les interactions)
+  late UserProfileVector _currentUserProfile;
+
+  bool _isLoading = true;
+
+  // Favorites
   Set<String> _favoriteIds = {};
+
+  // --- Mini-jeu state ---
+  bool _gameStarted = false;
+  int _currentRound = 0; // 1..5
+  Destination? _currentChoice;
+  final Set<String> _gameSeenIds = {}; // éviter répétitions pendant le jeu
+  
+  // Pour mesurer le temps de réaction (Interaction Duration)
+  DateTime? _cardShownTime;
+
+  // Carousel controller
+  final ScrollController _carouselController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    // Initialisation du profil vectoriel à partir des réponses statiques
+    _currentUserProfile = RecommendationService.createVectorFromPreferences(widget.userPreferences);
+    
     _loadRecommendations();
     _loadFavorites();
+  }
+
+  @override
+  void dispose() {
+    _carouselController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadFavorites() async {
@@ -46,91 +77,61 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   }
 
   Future<void> _loadRecommendations() async {
-    print('🔄 Chargement des destinations depuis SQLite...');
-
+    setState(() => _isLoading = true);
     try {
       _allDestinations = await _dbService.getAllDestinations();
-      print('📊 ${_allDestinations.length} destinations en base');
-      
-      print('\n🎯 Préférences utilisateur :');
-      print(widget.userPreferences.toString());
 
-      final recommendedDestinations = RecommendationService.filterAndSortDestinations(
+      // Utilisation de l'algorithme de recommandation avec le profil dynamique
+      final recommended = RecommendationService.recommend(
         _allDestinations,
         widget.userPreferences,
-      );
-
-      print('\n✅ ${recommendedDestinations.length} destinations correspondent aux critères');
-      
-      final stats = RecommendationService.getRecommendationStats(
-        _allDestinations,
-        recommendedDestinations,
-        widget.userPreferences,
+        currentProfile: _currentUserProfile, // On passe le profil qui peut avoir évolué
       );
 
       setState(() {
-        _destinations = recommendedDestinations;
-        _stats = stats;
+        _destinations = recommended;
         _isLoading = false;
       });
-
-      print('\n📈 Statistiques : ${stats['matchingDestinations']}/${stats['totalDestinations']} destinations (${stats['filterRate']})');
     } catch (e) {
-      print('❌ ERREUR lors du chargement des recommandations: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      print('Erreur chargement destinations: $e');
+      setState(() => _isLoading = false);
     }
   }
 
   void _navigateToPage(String page) {
-    Navigator.pop(context); // Fermer le drawer
+    Navigator.pop(context);
 
     switch (page) {
       case 'contact':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ContactPage()),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactPage()));
         break;
       case 'about':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AboutPage()),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()));
         break;
       case 'reset':
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => ResetPreferencesPage(
-              userPreferences: widget.userPreferences,
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => ResetPreferencesPage(userPreferences: widget.userPreferences)),
         );
         break;
       case 'favorites':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const FavoritesPage()),
-        ).then((_) => _loadFavorites()); // Recharger les favoris au retour
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))
+            .then((_) => _loadFavorites());
         break;
       case 'home':
-        // Déjà sur la page d'accueil
+        // nothing
         break;
     }
   }
 
+  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1a3a52),
-        title: const Text(
-          'Destinations recommandées',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Destinations recommandées', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         leading: Builder(
           builder: (context) => IconButton(
@@ -148,10 +149,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               DrawerHeader(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.shade900,
-                      Colors.blue.shade700,
-                    ],
+                    colors: [Colors.blue.shade900, const Color(0xFF1a3a52)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -160,26 +158,15 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Icon(
-                      Icons.travel_explore,
-                      size: 60,
-                      color: Colors.white.withOpacity(0.9),
+                    const CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.white24,
+                      child: Icon(Icons.person, size: 40, color: Colors.white),
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Serendia',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Votre guide voyage',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 14,
-                      ),
+                      'Menu',
+                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -216,36 +203,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         ),
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            )
-          : _destinations.isEmpty
-              ? _buildEmptyState()
-              : Column(
-                  children: [
-                    if (_stats != null) _buildStatsHeader(),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: _destinations.length,
-                        itemBuilder: (context, index) {
-                          final destination = _destinations[index];
-                          final rank = index + 1;
-                          return _buildDestinationCard(destination, rank);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : _buildContent(),
     );
   }
 
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    int? badge,
-  }) {
+  Widget _buildDrawerItem({required IconData icon, required String title, required VoidCallback onTap, int? badge}) {
     return ListTile(
       leading: Stack(
         clipBehavior: Clip.none,
@@ -266,414 +229,540 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   minHeight: 18,
                 ),
                 child: Text(
-                  badge > 99 ? '99+' : '$badge',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  '$badge',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
               ),
             ),
         ],
       ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
       onTap: onTap,
       hoverColor: Colors.white.withOpacity(0.1),
     );
   }
 
-  Widget _buildStatsHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
+  Widget _buildContent() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${_stats!['matchingDestinations']} destinations trouvées',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const Divider(color: Colors.white30, height: 20),
-          _buildStatRow('Budget', _stats!['budget']),
-          _buildStatRow('Activité', _stats!['activity']),
-          _buildStatRow('Continents', _stats!['continent']),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildStatRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '$label:',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 14,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.right,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          const SizedBox(height: 20),
+
+          // 1) Recommandation principale (grand bloc)
+          _buildMainRecommendation(),
+
+          const SizedBox(height: 20),
+
+          // 2) Mini-jeu interactif
+          _buildInteractiveGameBox(),
+
+          const SizedBox(height: 20),
+
+          // 3) Carrousel de suggestions
+          _buildSimilarDestinationsCarousel(),
+
+          const SizedBox(height: 30),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  String _getBudgetLevel(double cost) {
+    if (cost < 100) return '€';
+    if (cost < 200) return '€€';
+    return '€€€';
+  }
+
+  // ---------------- Main Recommendation ----------------
+  Widget _buildMainRecommendation() {
+    if (_destinations.isEmpty) {
+      return _buildEmptyStateReplacement();
+    }
+
+    final Destination best = _destinations.first;
+    final isFavorite = _favoriteIds.contains(best.id);
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DestinationDetailPage(destination: best, rank: 1),
+          ),
+        ).then((_) => _loadFavorites());
+      },
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade900,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'TOP 1 POUR VOUS',
+                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                Icon(
+                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: isFavorite ? Colors.red : Colors.white70,
+                ),
+              ],
+            ),
+            const SizedBox(height: 15),
+            Text(
+              best.name,
+              style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${best.continent}, ${best.country}',
+              style: const TextStyle(color: Colors.white70, fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                _buildTag(Icons.euro, _getBudgetLevel(best.averageCost)),
+                const SizedBox(width: 10),
+                _buildTag(Icons.wb_sunny, best.climate),
+                const SizedBox(width: 10),
+                _buildTag(Icons.star, best.rating.toString()),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              best.description,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                   Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DestinationDetailPage(destination: best, rank: 1),
+                    ),
+                  ).then((_) => _loadFavorites());
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue.shade900,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Voir les détails', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTag(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 5),
+          Text(text, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyStateReplacement() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(30),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        children: [
+          const Icon(Icons.travel_explore, size: 60, color: Colors.white54),
+          const SizedBox(height: 12),
+          const Text('Aucune recommandation disponible', style: TextStyle(color: Colors.white, fontSize: 18)),
+          const SizedBox(height: 8),
+          const Text('Essayez de modifier vos préférences', style: TextStyle(color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Interactive Game Box ----------------
+  Widget _buildInteractiveGameBox() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      height: 320,
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(16)),
+      child: !_gameStarted ? _buildStartScreen() : _buildGameRound(),
+    );
+  }
+
+  Widget _buildStartScreen() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.travel_explore,
-            size: 80,
-            color: Colors.white54,
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Aucune destination trouvée',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text('Mini-jeu : 5 choix rapides', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 18)),
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Essayez de modifier vos critères de recherche',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 14,
-              ),
+              'Aidez-nous à affiner vos recommandations en notant quelques destinations.',
               textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            onPressed: _startGame,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1a3a52),
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
             ),
-            child: const Text('Modifier les préférences'),
+            child: const Text('START'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDestinationCard(Destination destination, int rank) {
-    final activityMatch = widget.userPreferences.activityLevel != null
-        ? 100 - (destination.activityScore - widget.userPreferences.activityLevel!).abs().round()
-        : 0;
-    
-    final isFavorite = _favoriteIds.contains(destination.id);
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DestinationDetailPage(
-                destination: destination,
-                rank: rank,
+  void _startGame() {
+    if (_allDestinations.isEmpty) return;
+
+    setState(() {
+      _gameStarted = true;
+      _currentRound = 1;
+      _gameSeenIds.clear();
+      _currentChoice = _getRandomUnseenDestination();
+      if (_currentChoice != null) {
+        _gameSeenIds.add(_currentChoice!.id);
+        _cardShownTime = DateTime.now(); // Start timer
+      }
+    });
+  }
+
+  Widget _buildGameRound() {
+    if (_currentChoice == null) {
+      return const Center(child: Text("Plus de destinations à noter", style: TextStyle(color: Colors.white)));
+    }
+
+    final dest = _currentChoice!;
+    final isFavorite = _favoriteIds.contains(dest.id);
+
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top row: compteur et "Favoris"
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('$_currentRound/5', style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
+              IconButton(
+                icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : Colors.white54),
+                onPressed: () async {
+                  // Toggle favorite logic
+                  if (isFavorite) {
+                    await _favoritesService.removeFavorite(dest.id);
+                  } else {
+                    await _favoritesService.addFavorite(dest.id);
+                    // Log interaction for favorite
+                    _logInteraction(InteractionType.addToFavorites);
+                  }
+                  _loadFavorites();
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Destination affichée
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_city, size: 40, color: Colors.white70),
+                  const SizedBox(height: 10),
+                  Text(dest.name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text(dest.country, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Chip(label: Text(_getBudgetLevel(dest.averageCost)), backgroundColor: Colors.white10, labelStyle: const TextStyle(color: Colors.white)),
+                      Chip(label: Text(dest.climate), backgroundColor: Colors.white10, labelStyle: const TextStyle(color: Colors.white)),
+                    ],
+                  )
+                ],
               ),
             ),
-          ).then((_) => _loadFavorites()); // Recharger les favoris au retour
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                Colors.blue.shade900,
-                Colors.blue.shade700,
-              ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Bottom row: dislike - fav - like
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildGameButton(Icons.close, Colors.red.shade400, () => _onUserChoice('dislike')),
+              _buildGameButton(Icons.check, Colors.green.shade400, () => _onUserChoice('like')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGameButton(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        width: 60,
+        height: 60,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.2),
+          shape: BoxShape.circle,
+          border: Border.all(color: color, width: 2),
+        ),
+        child: Icon(icon, color: color, size: 30),
+      ),
+    );
+  }
+
+  // Traitement d'un like/dislike
+  Future<void> _onUserChoice(String action) async {
+    if (_currentChoice == null) return;
+
+    // 1. Log Interaction & Update Profile
+    final type = action == 'like' ? InteractionType.like : InteractionType.dislike;
+    await _logInteraction(type);
+
+    // Snack
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(action == 'like' ? '👍 Intéressant !' : '👎 Pas pour moi'),
+          duration: const Duration(milliseconds: 500),
+          behavior: SnackBarBehavior.floating,
+        )
+      );
+    }
+
+    // Avancer
+    if (_currentRound >= 5) {
+      _finishGameAndRecompute();
+    } else {
+      setState(() {
+        _currentRound++;
+        _currentChoice = _getRandomUnseenDestination();
+        if (_currentChoice != null) {
+          _gameSeenIds.add(_currentChoice!.id);
+          _cardShownTime = DateTime.now(); // Reset timer
+        }
+      });
+    }
+  }
+
+  Future<void> _logInteraction(InteractionType type) async {
+    if (_currentChoice == null) return;
+
+    final duration = _cardShownTime != null 
+        ? DateTime.now().difference(_cardShownTime!).inMilliseconds 
+        : 1000;
+
+    final interaction = UserInteraction(
+      destinationId: _currentChoice!.id,
+      type: type,
+      timestamp: DateTime.now(),
+      durationMs: duration,
+    );
+
+    // 1. Sauvegarde en BDD
+    await UserInteractionService.logInteraction(interaction);
+
+    // 2. Mise à jour du profil utilisateur en mémoire (Apprentissage)
+    setState(() {
+      _currentUserProfile = UserInteractionService.updateUserProfile(
+        _currentUserProfile,
+        _currentChoice!,
+        interaction,
+      );
+    });
+  }
+
+  Destination? _getRandomUnseenDestination() {
+    final candidates = _allDestinations.where((d) => !_gameSeenIds.contains(d.id)).toList();
+    if (candidates.isEmpty) return null;
+    candidates.shuffle(Random());
+    return candidates.first;
+  }
+
+  void _finishGameAndRecompute() {
+    // Recalculer la recommandation principale en tenant compte du profil mis à jour
+    final newRecos = RecommendationService.recommend(
+      _allDestinations,
+      widget.userPreferences,
+      currentProfile: _currentUserProfile, // Le profil a été enrichi par les interactions
+    );
+
+    setState(() {
+      _destinations = newRecos;
+      _gameStarted = false;
+      _currentRound = 0;
+      _currentChoice = null;
+      _gameSeenIds.clear();
+    });
+
+    // Retour utilisateur
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Merci ! Vos recommandations ont été affinées.'),
+          backgroundColor: Colors.green,
+        )
+      );
+    }
+  }
+
+  // ---------------- Carousel ----------------
+  Widget _buildSimilarDestinationsCarousel() {
+    // Exclure la première (main) pour le carrousel
+    final list = _destinations.length > 1 ? _destinations.sublist(1) : [];
+
+    if (list.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Vous pourriez aussi aimer', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 15),
+          SizedBox(
+            height: 220,
+            child: ListView.builder(
+              controller: _carouselController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: list.length,
+              itemBuilder: (context, index) {
+                final dest = list[index];
+                return _buildCarouselCard(dest, index + 2); // +2 car rank 1 est en haut
+              },
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            destination.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on,
-                                  color: Colors.white70, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${destination.country} • ${destination.continent}',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade700.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '#$rank',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${destination.averageCost.toInt()}\$/jour',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCarouselCard(Destination dest, int rank) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DestinationDetailPage(destination: dest, rank: rank),
+          ),
+        ).then((_) => _loadFavorites());
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 15),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.star,
-                      color: Colors.amber.shade300,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      destination.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    if (widget.userPreferences.activityLevel != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.lightGreen.shade700.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.lightGreen.shade300,
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          'Match Activité: $activityMatch%',
-                          style: TextStyle(
-                            color: Colors.lightGreen.shade300,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(width: 16),
-                    if (destination.unescoSite) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade700.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.amber.shade300,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.verified,
-                              color: Colors.amber.shade300,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'UNESCO',
-                              style: TextStyle(
-                                color: Colors.amber.shade300,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: isFavorite ? Colors.red : Colors.white,
-                      ),
-                      onPressed: () async {
-                        await _favoritesService.toggleFavorite(destination.id);
-                        await _loadFavorites();
-                        
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                isFavorite 
-                                    ? 'Retiré des favoris' 
-                                    : '💛 Ajouté aux favoris',
-                              ),
-                              duration: const Duration(seconds: 2),
-                              backgroundColor: isFavorite ? Colors.orange : Colors.green,
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ],
+                child: Center(
+                  child: Icon(Icons.landscape, size: 40, color: Colors.white30),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  destination.description,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    height: 1.5,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dest.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: destination.activities.take(5).map((activity) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        activity,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Voir les détails',
-                      style: TextStyle(
-                        color: Colors.blue.shade200,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.blue.shade200,
-                      size: 14,
-                    ),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    dest.country,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.star, size: 14, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(dest.rating.toString(), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
