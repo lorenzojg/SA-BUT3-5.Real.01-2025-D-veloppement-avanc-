@@ -16,7 +16,7 @@ class RecommendationService {
   static List<Destination> recommend(
       List<Destination> allDestinations,
       UserPreferences preferences,
-      {int? travelMonth, UserProfileVector? currentProfile}
+      {int? travelMonth, UserProfileVector? currentProfile, int limit = 20}
       ) {
     
     // 1. Initialiser le profil vectoriel de l'utilisateur
@@ -26,23 +26,29 @@ class RecommendationService {
     List<ScoredDestination> candidates = [];
     
     // Date de voyage (mois prochain par défaut si non spécifié)
-    // final int targetMonth = travelMonth ?? DateTime.now().month + 1;
+    final int targetMonth = travelMonth ?? (DateTime.now().month + 1);
+    final int adjustedMonth = targetMonth > 12 ? targetMonth - 12 : targetMonth;
 
     for (var dest in allDestinations) {
       
-      // --- Étape A : Filtrage Dur (Hard Filtering) ---
+      // --- Étape A : Filtrage Souple (Soft Filtering) ---
+      double penalty = 0.0;
       
       // 1. Zone Géo (Adapté pour liste de continents)
-      if (!_matchesContinent(dest, preferences.selectedContinents)) continue;
+      if (!_matchesContinent(dest, preferences.selectedContinents)) {
+        penalty += 100.0; // Pénalité forte mais pas excluante
+      }
       
       // 2. Type de voyage (Solo, Couple, Famille)
-      if (!_matchesTravelType(dest, preferences.travelers)) continue;
+      if (!_matchesTravelType(dest, preferences.travelers)) {
+        penalty += 50.0;
+      }
 
       // 3. Climat (Simplifié pour l'instant)
-      // if (!_isClimateGood(dest, preferences.prefJaugeClimat, targetMonth)) continue;
+      // if (!_isClimateGood(dest, preferences.prefJaugeClimat, targetMonth)) penalty += 20.0;
       
       // --- Étape C : Validation Budgétaire (Estimation) ---
-      double estimatedCost = _calculateCost(dest, preferences);
+      double estimatedCost = _calculateCost(dest, preferences, adjustedMonth);
       
       // Calcul du nombre de voyageurs pour ramener le coût par personne
       int travelersCount = 1;
@@ -56,23 +62,28 @@ class RecommendationService {
       double? maxBudgetPerPerson = _mapBudgetLevelToAmount(preferences.budgetLevel);
       
       // Si maxBudget est null (illimité) ou si le coût est dans la tolérance (+20%)
-      if (maxBudgetPerPerson != null && costPerPerson > maxBudgetPerPerson * 1.2) continue;
+      if (maxBudgetPerPerson != null && costPerPerson > maxBudgetPerPerson * 1.2) {
+        penalty += 80.0; // Pénalité budget
+      }
 
       // --- Étape B : Calcul du Score de Compatibilité ---
       double similarityScore = _calculateSimilarity(vectorUser, dest);
       
+      // Application de la pénalité
+      double finalScore = similarityScore - penalty;
+      
       // Boost Score si c'est un favori archivé (TODO: intégrer UserInformations)
       // if (userInfo.favorites.contains(dest.id)) score *= 1.5;
 
-      candidates.add(ScoredDestination(dest, similarityScore, estimatedCost));
+      candidates.add(ScoredDestination(dest, finalScore, estimatedCost));
     }
 
     // 4. Tri et Renvoi
     // On trie par score décroissant
     candidates.sort((a, b) => b.score.compareTo(a.score));
     
-    // On retourne les destinations brutes
-    return candidates.map((e) => e.destination).toList();
+    // On retourne les destinations brutes (Top N)
+    return candidates.take(limit).map((e) => e.destination).toList();
   }
 
   /// Crée un vecteur utilisateur basé sur les réponses au questionnaire
@@ -139,7 +150,7 @@ class RecommendationService {
   }
 
   /// Estime le coût total du voyage
-  static double _calculateCost(Destination dest, UserPreferences prefs) {
+  static double _calculateCost(Destination dest, UserPreferences prefs, int month) {
     // Hypothèses simplifiées
     int durationDays = 7; // Durée standard
     int travelersCount = 1;
@@ -151,10 +162,18 @@ class RecommendationService {
     // Note: averageCost est souvent par personne par jour
     double livingCost = (dest.averageCost * durationDays) * travelersCount;
     
-    // Coût Vol (Estimation grossière car on n'a pas encore la DB vols connectée ici)
-    // On pourrait utiliser une moyenne basée sur la distance/continent
+    // Coût Vol
     double flightCostPerPerson = 500.0; // Valeur par défaut
-    if (dest.continent != 'Europe') flightCostPerPerson = 1000.0;
+
+    // Utilisation des prix mensuels si disponibles
+    if (dest.monthlyFlightPrices != null && dest.monthlyFlightPrices!.isNotEmpty) {
+      // month est 1-12, l'index est 0-11
+      int index = (month - 1).clamp(0, 11);
+      flightCostPerPerson = dest.monthlyFlightPrices![index].toDouble();
+    } else {
+      // Fallback si pas de données précises
+      if (dest.continent != 'Europe') flightCostPerPerson = 1000.0;
+    }
     
     double totalFlightCost = flightCostPerPerson * travelersCount;
 

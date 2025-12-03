@@ -6,6 +6,7 @@ import '../models/user_interaction_model.dart';
 import '../models/user_profile_vector.dart';
 import '../services/database_service.dart';
 import '../services/recommendation_service.dart';
+import '../services/enhanced_recommendation_service.dart';
 import '../services/favorites_service.dart';
 import '../services/user_interaction_service.dart';
 import 'contact_page.dart';
@@ -29,6 +30,7 @@ class RecommendationsPage extends StatefulWidget {
 class _RecommendationsPageState extends State<RecommendationsPage> {
   final DatabaseService _dbService = DatabaseService();
   final FavoritesService _favoritesService = FavoritesService();
+  final EnhancedRecommendationService _enhancedService = EnhancedRecommendationService();
 
   List<Destination> _allDestinations = [];
   List<Destination> _destinations = []; // ordered recommendations
@@ -59,6 +61,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     // Initialisation du profil vectoriel à partir des réponses statiques
     _currentUserProfile = RecommendationService.createVectorFromPreferences(widget.userPreferences);
     
+    // Initialiser le service enrichi
+    _enhancedService.initialize(preferences: widget.userPreferences);
+
     _loadRecommendations();
     _loadFavorites();
   }
@@ -81,11 +86,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     try {
       _allDestinations = await _dbService.getAllDestinations();
 
-      // Utilisation de l'algorithme de recommandation avec le profil dynamique
-      final recommended = RecommendationService.recommend(
+      // Utilisation de l'algorithme de recommandation enrichi
+      final recommended = await _enhancedService.getEnhancedRecommendations(
         _allDestinations,
-        widget.userPreferences,
-        currentProfile: _currentUserProfile, // On passe le profil qui peut avoir évolué
+        limit: 20,
       );
 
       setState(() {
@@ -345,7 +349,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               children: [
                 _buildTag(Icons.euro, _getBudgetLevel(best.averageCost)),
                 const SizedBox(width: 10),
-                _buildTag(Icons.wb_sunny, best.climate),
+                _buildTag(
+                  Icons.wb_sunny, 
+                  best.climate.length > 20 
+                      ? '${best.climate.substring(0, 17)}...' 
+                      : best.climate
+                ),
                 const SizedBox(width: 10),
                 _buildTag(Icons.star, best.rating.toString()),
               ],
@@ -621,10 +630,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
       durationMs: duration,
     );
 
-    // 1. Sauvegarde en BDD
-    await UserInteractionService.logInteraction(interaction);
+    // 1. Sauvegarde en BDD via le service enrichi (qui gère aussi l'historique pour l'algo)
+    await _enhancedService.recordInteraction(_currentChoice!.id, type);
 
-    // 2. Mise à jour du profil utilisateur en mémoire (Apprentissage)
+    // 2. Mise à jour du profil utilisateur en mémoire (Apprentissage local pour affichage ou autre)
     setState(() {
       _currentUserProfile = UserInteractionService.updateUserProfile(
         _currentUserProfile,
@@ -641,16 +650,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     return candidates.first;
   }
 
-  void _finishGameAndRecompute() {
+  Future<void> _finishGameAndRecompute() async {
     // Recalculer la recommandation principale en tenant compte du profil mis à jour
-    final newRecos = RecommendationService.recommend(
-      _allDestinations,
-      widget.userPreferences,
-      currentProfile: _currentUserProfile, // Le profil a été enrichi par les interactions
-    );
+    // On recharge via le service enrichi qui a pris en compte les interactions
+    await _loadRecommendations();
 
     setState(() {
-      _destinations = newRecos;
       _gameStarted = false;
       _currentRound = 0;
       _currentChoice = null;

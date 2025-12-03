@@ -30,6 +30,9 @@ class Destination {
   final double scoreUrban;
   final double scoreSeclusion;
 
+  // ✅ NOUVEAU : Prix des vols par mois (Jan -> Dec)
+  final List<int>? monthlyFlightPrices;
+
   Destination({
     required this.id,
     required this.name,
@@ -56,6 +59,7 @@ class Destination {
     this.scoreWellness = 0.0,
     this.scoreUrban = 0.0,
     this.scoreSeclusion = 0.0,
+    this.monthlyFlightPrices,
   });
 
   // Méthode fromJson pour le DataLoaderService
