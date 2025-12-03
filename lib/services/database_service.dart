@@ -106,7 +106,7 @@ class DatabaseService {
       final map = maps[i];
       // Sécurisation: Utiliser ?? 50.0 au cas où la colonne n'est pas encore créée
       // ou contient une valeur nulle (ce qui ne devrait pas arriver avec la migration)
-      final activityScore = (map['activityScore'] as num? ?? 50.0).toDouble();
+      final activityScore = (map['activityScore'] as num? ?? 50).toInt();
 
       return Destination(
         id: map['id'] as String,
@@ -143,7 +143,7 @@ class DatabaseService {
     final map = maps.first;
     
     // Sécurisation de la lecture de activityScore
-    final activityScore = (map['activityScore'] as num? ?? 50.0).toDouble();
+    final activityScore = (map['activityScore'] as num? ?? 50).toInt();
 
     return Destination(
       id: map['id'] as String,
@@ -176,7 +176,7 @@ class DatabaseService {
 
     return List.generate(maps.length, (i) {
       final map = maps[i];
-      final activityScore = (map['activityScore'] as num? ?? 50.0).toDouble();
+      final activityScore = (map['activityScore'] as num? ?? 50).toInt();
 
       return Destination(
         id: map['id'] as String,

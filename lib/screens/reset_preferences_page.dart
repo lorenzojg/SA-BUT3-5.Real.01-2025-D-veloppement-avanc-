@@ -137,7 +137,7 @@ class ResetPreferencesPage extends StatelessWidget {
             _buildPreferenceCard(
               icon: Icons.public,
               title: 'Continents sélectionnés',
-              value: userPreferences.selectedContinents?.join(', ') ?? 'Aucun',
+              value: userPreferences.selectedContinents.join(', ') ?? 'Aucun',
               color: Colors.blue,
             ),
             const SizedBox(height: 40),
@@ -273,10 +273,10 @@ class ResetPreferencesPage extends StatelessWidget {
     
     final roundedLevel = level.round();
     
-    if (level < 20) return 'Très détente (${roundedLevel}/100)';
-    if (level < 40) return 'Plutôt détente (${roundedLevel}/100)';
-    if (level < 60) return 'Équilibré (${roundedLevel}/100)';
-    if (level < 80) return 'Plutôt sportif (${roundedLevel}/100)';
-    return 'Très sportif (${roundedLevel}/100)';
+    if (level < 20) return 'Très détente ($roundedLevel/100)';
+    if (level < 40) return 'Plutôt détente ($roundedLevel/100)';
+    if (level < 60) return 'Équilibré ($roundedLevel/100)';
+    if (level < 80) return 'Plutôt sportif ($roundedLevel/100)';
+    return 'Très sportif ($roundedLevel/100)';
   }
 }

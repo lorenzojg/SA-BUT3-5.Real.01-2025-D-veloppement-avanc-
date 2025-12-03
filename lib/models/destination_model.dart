@@ -18,7 +18,7 @@ class Destination {
 
   // Champs de la logique de recommandation (pour simplifier le Reco Service)
   // Utilise averageCost pour le budget et le score d'activité doit être ajouté
-  final double activityScore; // 0.0 (détente) à 100.0 (sportif)
+  final int activityScore; // 0.0 (détente) à 100.0 (sportif)
 
   Destination({
     required this.id,
@@ -59,7 +59,7 @@ class Destination {
       annualVisitors: (json['annualVisitors'] as num).toDouble(),
       unescoSite: json['unescoSite'] as bool,
       // Supposons que activityScore est aussi dans le JSON
-      activityScore: (json['activityScore'] as num? ?? 50.0).toDouble(), 
+      activityScore: (json['activityScore'] as num? ?? 50).toInt(), 
     );
   }
 }

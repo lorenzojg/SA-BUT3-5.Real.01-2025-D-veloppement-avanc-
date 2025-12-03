@@ -1,5 +1,5 @@
-import 'destination_model.dart';
-import 'questionnaire_model.dart';
+import '../models/destination_model.dart';
+import '../models/questionnaire_model.dart';
 
 class RecommendationService {
   // Correction: La méthode filterDestinations doit utiliser la nouvelle logique de préférences.

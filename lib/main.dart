@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart'; // ✅ Import de la splash screen
-import 'screens/questionnaire_page_budget.dart';
-import 'screens/questionnaire_page_detente_sportif.dart';
-import 'screens/questionnaire_page_continents.dart';
 
 void main() {
   // ✅ Assurer que les Bindings sont initialisés pour Sqflite/Assets
@@ -25,4 +22,5 @@ class MyApp extends StatelessWidget {
       home: const SplashScreen(),
     );
   }
+  
 }

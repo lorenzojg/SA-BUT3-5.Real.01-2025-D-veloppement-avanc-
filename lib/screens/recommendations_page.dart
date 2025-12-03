@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
 import '../models/questionnaire_model.dart';
 import '../services/database_service.dart';
-import '../models/recommendation_service.dart'; // ✅ Changé de models/ à services/
+import '../services/recommendation_service.dart';
+import '../services/favorites_service.dart';
 import 'contact_page.dart';
 import 'about_page.dart';
 import 'reset_preferences_page.dart';
+import 'favorites_page.dart';
+import 'destination_detail_page.dart';
 
 class RecommendationsPage extends StatefulWidget {
   final UserPreferences userPreferences;
@@ -21,15 +24,25 @@ class RecommendationsPage extends StatefulWidget {
 
 class _RecommendationsPageState extends State<RecommendationsPage> {
   final DatabaseService _dbService = DatabaseService();
+  final FavoritesService _favoritesService = FavoritesService();
   List<Destination> _destinations = [];
   bool _isLoading = true;
   Map<String, dynamic>? _stats;
   List<Destination> _allDestinations = [];
+  Set<String> _favoriteIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadRecommendations();
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    await _favoritesService.initialize();
+    setState(() {
+      _favoriteIds = _favoritesService.getFavoriteIds();
+    });
   }
 
   Future<void> _loadRecommendations() async {
@@ -95,6 +108,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             ),
           ),
         );
+        break;
+      case 'favorites':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const FavoritesPage()),
+        ).then((_) => _loadFavorites()); // Recharger les favoris au retour
         break;
       case 'home':
         // Déjà sur la page d'accueil
@@ -172,6 +191,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               ),
               const Divider(color: Colors.white24),
               _buildDrawerItem(
+                icon: Icons.favorite,
+                title: 'Mes Favoris',
+                badge: _favoriteIds.isNotEmpty ? _favoriteIds.length : null,
+                onTap: () => _navigateToPage('favorites'),
+              ),
+              _buildDrawerItem(
                 icon: Icons.refresh,
                 title: 'Recommencer',
                 onTap: () => _navigateToPage('reset'),
@@ -219,9 +244,40 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    int? badge,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white),
+      leading: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, color: Colors.white),
+          if (badge != null && badge > 0)
+            Positioned(
+              right: -8,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 18,
+                  minHeight: 18,
+                ),
+                child: Text(
+                  badge > 99 ? '99+' : '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
       title: Text(
         title,
         style: const TextStyle(
@@ -347,213 +403,276 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         ? 100 - (destination.activityScore - widget.userPreferences.activityLevel!).abs().round()
         : 0;
     
+    final isFavorite = _favoriteIds.contains(destination.id);
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.shade900,
-              Colors.blue.shade700,
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          destination.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on,
-                                color: Colors.white70, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${destination.country} • ${destination.continent}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade700.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '#$rank',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${destination.averageCost.toInt()}\$/jour',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DestinationDetailPage(
+                destination: destination,
+                rank: rank,
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.star,
-                    color: Colors.amber.shade300,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    destination.rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  if (widget.userPreferences.activityLevel != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.lightGreen.shade700.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.lightGreen.shade300,
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        'Match Activité: $activityMatch%',
-                        style: TextStyle(
-                          color: Colors.lightGreen.shade300,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(width: 16),
-                  if (destination.unescoSite) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade700.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.amber.shade300,
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
+            ),
+          ).then((_) => _loadFavorites()); // Recharger les favoris au retour
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                Colors.blue.shade900,
+                Colors.blue.shade700,
+              ],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.verified,
-                            color: Colors.amber.shade300,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
                           Text(
-                            'UNESCO',
-                            style: TextStyle(
-                              color: Colors.amber.shade300,
-                              fontSize: 12,
+                            destination.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on,
+                                  color: Colors.white70, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${destination.country} • ${destination.continent}',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade700.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '#$rank',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${destination.averageCost.toInt()}\$/jour',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                destination.description,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  height: 1.5,
                 ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: destination.activities.map((activity) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.star,
+                      color: Colors.amber.shade300,
+                      size: 18,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      activity,
+                    const SizedBox(width: 4),
+                    Text(
+                      destination.rating.toStringAsFixed(1),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ],
+                    const SizedBox(width: 16),
+                    if (widget.userPreferences.activityLevel != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.lightGreen.shade700.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.lightGreen.shade300,
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          'Match Activité: $activityMatch%',
+                          style: TextStyle(
+                            color: Colors.lightGreen.shade300,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 16),
+                    if (destination.unescoSite) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade700.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.amber.shade300,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.verified,
+                              color: Colors.amber.shade300,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'UNESCO',
+                              style: TextStyle(
+                                color: Colors.amber.shade300,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                        color: isFavorite ? Colors.red : Colors.white,
+                      ),
+                      onPressed: () async {
+                        await _favoritesService.toggleFavorite(destination.id);
+                        await _loadFavorites();
+                        
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isFavorite 
+                                    ? 'Retiré des favoris' 
+                                    : '💛 Ajouté aux favoris',
+                              ),
+                              duration: const Duration(seconds: 2),
+                              backgroundColor: isFavorite ? Colors.orange : Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  destination.description,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: destination.activities.take(5).map((activity) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        activity,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Voir les détails',
+                      style: TextStyle(
+                        color: Colors.blue.shade200,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.blue.shade200,
+                      size: 14,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
