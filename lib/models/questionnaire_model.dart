@@ -12,6 +12,8 @@ class Question {
 
 class QuestionnaireData {
   static List<Question> getQuestions() {
+    // Les questions traditionnelles ne sont plus utilisées par le QuestionnairePage Manager
+    // mais sont conservées comme référence.
     return [
       Question(
         title: 'Quelques petites questions avant de\ncommencer l\'expérience',
@@ -49,42 +51,13 @@ class QuestionnaireData {
 }
 
 class UserPreferences {
-  String? budget;
-  String? continent;
-  String? travelers;
+  // ✅ Champs pour les réponses du questionnaire par étapes (les seuls utilisés)
+  List<String> selectedContinents = []; // Sélection multiple
+  double? budgetLevel; // Valeur du curseur (0.0 à 4.0)
+  double? activityLevel; // Valeur du curseur (0.0 à 100.0)
+  String? travelers; // 'En solo', 'En couple', 'En famille'
 
-  UserPreferences({
-    this.budget,
-    this.continent,
-    this.travelers,
-  });
-
-  void setAnswer(int questionIndex, String answer) {
-    switch (questionIndex) {
-      case 0:
-        budget = answer;
-        break;
-      case 1:
-        continent = answer;
-        break;
-      case 2:
-        travelers = answer;
-        break;
-    }
-  }
-
-  String? getAnswer(int questionIndex) {
-    switch (questionIndex) {
-      case 0:
-        return budget;
-      case 1:
-        return continent;
-      case 2:
-        return travelers;
-      default:
-        return null;
-    }
-  }
+  // Anciens champs supprimés pour éviter la confusion dans le RecoService
 
   // --- Nouveaux champs pour l'algorithme avancé ---
   // Ces valeurs seraient idéalement remplies par des questions supplémentaires
@@ -102,6 +75,15 @@ class UserPreferences {
 
   @override
   String toString() {
-    return 'Budget: $budget\nContinent: $continent\nVoyageurs: $travelers';
+    final budget = budgetLevel != null ? budgetLevel!.round() : 'N/A';
+    final activity = activityLevel != null ? activityLevel!.round() : 'N/A';
+
+    return 'UserPreferences: \n'
+        '  Continents: ${selectedContinents.join(', ')}\n'
+        '  Voyageurs: ${travelers ?? "Non spécifié"}\n'
+        '  Ville/Nature: ${(prefJaugeVille * 100).toStringAsFixed(0)}% Ville\n'
+        '  Climat: ${prefJaugeClimat.toStringAsFixed(1)}°C\n'
+        '  Niveau Budget: $budget\n'
+        '  Niveau Activité: $activity';
   }
 }

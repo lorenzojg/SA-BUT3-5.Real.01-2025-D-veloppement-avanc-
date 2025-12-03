@@ -32,8 +32,8 @@ class RecommendationService {
       
       // --- Étape A : Filtrage Dur (Hard Filtering) ---
       
-      // 1. Zone Géo
-      if (!_matchesContinent(dest, preferences.continent)) continue;
+      // 1. Zone Géo (Adapté pour liste de continents)
+      if (!_matchesContinent(dest, preferences.selectedContinents)) continue;
       
       // 2. Type de voyage (Solo, Couple, Famille)
       if (!_matchesTravelType(dest, preferences.travelers)) continue;
@@ -44,11 +44,19 @@ class RecommendationService {
       // --- Étape C : Validation Budgétaire (Estimation) ---
       double estimatedCost = _calculateCost(dest, preferences);
       
-      // Filtre budget strict ou souple ? Ici on applique un filtre souple
-      // Si le coût dépasse le budget max estimé, on peut soit exclure, soit pénaliser le score.
-      // Pour l'instant, on exclut si ça dépasse largement (> 20% tolérance)
-      double? maxBudget = _parseBudget(preferences.budget);
-      if (maxBudget != null && estimatedCost > maxBudget * 1.2) continue;
+      // Calcul du nombre de voyageurs pour ramener le coût par personne
+      int travelersCount = 1;
+      if (preferences.travelers == 'En couple') travelersCount = 2;
+      if (preferences.travelers == 'En famille') travelersCount = 4;
+      
+      double costPerPerson = estimatedCost / travelersCount;
+      
+      // Filtre budget strict ou souple ?
+      // On mappe le niveau de budget (0-4) à un montant max estimé PAR PERSONNE
+      double? maxBudgetPerPerson = _mapBudgetLevelToAmount(preferences.budgetLevel);
+      
+      // Si maxBudget est null (illimité) ou si le coût est dans la tolérance (+20%)
+      if (maxBudgetPerPerson != null && costPerPerson > maxBudgetPerPerson * 1.2) continue;
 
       // --- Étape B : Calcul du Score de Compatibilité ---
       double similarityScore = _calculateSimilarity(vectorUser, dest);
@@ -153,22 +161,25 @@ class RecommendationService {
     return livingCost + totalFlightCost;
   }
 
-  /// Parse le budget string en double
-  static double? _parseBudget(String? budgetStr) {
-    if (budgetStr == null || budgetStr == 'Sans précision de budget') return null;
+  /// Mappe le niveau de budget (0-4) à un montant max estimé
+  static double? _mapBudgetLevelToAmount(double? level) {
+    if (level == null) return null;
+    int rounded = level.round();
     
-    if (budgetStr == '< 500€') return 500.0;
-    if (budgetStr == '< 500€ et > 1000€') return 1000.0; // Note: le libellé original semble bizarre (<500 et >1000 impossible), je suppose 500-1000
-    if (budgetStr == '< 1000€ et > 2000€') return 2000.0; // Idem, suppose 1000-2000
-    if (budgetStr == '> 2000€') return 5000.0; // Cap arbitraire haut
-    
-    return null;
+    switch (rounded) {
+      case 0: return 500.0; // Très petit budget
+      case 1: return 1000.0; // Petit budget
+      case 2: return 2000.0; // Moyen
+      case 3: return 3500.0; // Élevé
+      case 4: return null; // Illimité
+      default: return 2000.0;
+    }
   }
 
   // --- Méthodes de filtrage existantes (adaptées) ---
 
-  static bool _matchesContinent(Destination destination, String? continent) {
-    if (continent == null || continent == 'Sans préférence') return true;
+  static bool _matchesContinent(Destination destination, List<String> selectedContinents) {
+    if (selectedContinents.isEmpty) return true;
 
     final continentMapping = {
       'Europe': ['Europe'],
@@ -180,30 +191,74 @@ class RecommendationService {
       'Asie': ['Asie', 'Asia'],
     };
 
-    final allowedContinents = continentMapping[continent] ?? [continent];
-    return allowedContinents.any((c) => destination.continent.toLowerCase() == c.toLowerCase());
+    for (var selected in selectedContinents) {
+      final allowed = continentMapping[selected] ?? [selected];
+      if (allowed.any((c) => destination.continent.toLowerCase() == c.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static bool _matchesTravelType(Destination destination, String? travelers) {
+    // TODO: Réactiver le filtrage quand les données 'travelTypes' contiendront 'solo', 'couple', 'famille'.
+    // Actuellement, elles contiennent le niveau de budget (ex: 'Luxury').
+    return true; 
+    
+    /*
     if (travelers == null) return true;
     
     String requiredType = 'solo';
     if (travelers == 'En couple') requiredType = 'couple';
     if (travelers == 'En famille') requiredType = 'famille';
 
-    return destination.travelTypes.contains(requiredType);
+    // Si la destination n'a pas d'info travelTypes, on accepte par défaut
+    if (destination.travelTypes.isEmpty) return true;
+
+    return destination.travelTypes.map((e) => e.toLowerCase()).contains(requiredType);
+    */
   }
   
   // --- Méthodes Legacy (pour compatibilité si appelées ailleurs) ---
   
-  static List<Destination> filterDestinations(List<Destination> destinations, UserPreferences preferences) {
+  static List<Destination> filterAndSortDestinations(List<Destination> destinations, UserPreferences preferences) {
     return recommend(destinations, preferences);
   }
   
-  static List<Destination> sortByRelevance(List<Destination> destinations, UserPreferences preferences) {
-    return recommend(destinations, preferences);
+  /// Obtient des statistiques sur les recommandations (utilisé dans recommendations_page.dart)
+  static Map<String, dynamic> getRecommendationStats(
+    List<Destination> originalList,
+    List<Destination> filteredList,
+    UserPreferences preferences,
+  ) {
+    // Mapping pour l'affichage des niveaux de budget
+    final budgetLabels = {
+      0: 'Petit budget (€)', 
+      1: 'Modéré (€€)', 
+      2: 'Confortable (€€€)', 
+      3: 'Élevé (€€€€)', 
+      4: 'Illimité (€€€€€)'
+    };
+    final activityDescription = _getActivityDescription(preferences.activityLevel ?? 50.0);
+
+    return {
+      'totalDestinations': originalList.length,
+      'matchingDestinations': filteredList.length,
+      'budget': budgetLabels[preferences.budgetLevel?.round()] ?? 'Non spécifié',
+      'continent': preferences.selectedContinents.isEmpty 
+                   ? 'Non spécifié' 
+                   : preferences.selectedContinents.join(', '),
+      'activity': activityDescription,
+      'filterRate': originalList.isEmpty ? '0%' :
+      '${((filteredList.length / originalList.length) * 100).toStringAsFixed(1)}%',
+    };
+  }
+  
+  static String _getActivityDescription(double level) {
+    if (level < 20) return 'Très détente';
+    if (level < 40) return 'Plutôt détente';
+    if (level < 60) return 'Équilibré';
+    if (level < 80) return 'Plutôt sportif';
+    return 'Très sportif';
   }
 }
-
-
-

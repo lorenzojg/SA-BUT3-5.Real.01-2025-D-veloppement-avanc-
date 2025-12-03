@@ -34,6 +34,11 @@ dependencies:
   path: ^1.8.3
   cupertino_icons: ^1.0.8
   countries_world_map: ^1.3.0
+  url_launcher: ^6.3.2
+  shared_preferences: ^2.5.3
+  sqflite_common_ffi: ^2.3.6
+  csv: ^6.0.0
+
 
 dev_dependencies:
   flutter_test:
@@ -64,6 +69,8 @@ flutter:
   assets:
     - assets/destinations.json
     - assets/images/
+    - assets/data/
+    - assets/database/
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
@@ -89,3 +96,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+countries_world_map: ^1.3.0
+
+shared_preferences: ^2.2.2x

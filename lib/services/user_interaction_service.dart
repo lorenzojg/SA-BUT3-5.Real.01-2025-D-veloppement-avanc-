@@ -1,9 +1,16 @@
 import '../models/destination_model.dart';
 import '../models/user_interaction_model.dart';
 import '../models/user_profile_vector.dart';
+import 'database_service.dart';
 
 class UserInteractionService {
   
+  /// Enregistre une interaction en base de données
+  static Future<void> logInteraction(UserInteraction interaction) async {
+    final db = DatabaseService();
+    await db.recordInteraction(interaction);
+  }
+
   /// Met à jour le vecteur utilisateur en fonction d'une nouvelle interaction
   /// C'est ici que se passe l'apprentissage (Feedback Loop)
   static UserProfileVector updateUserProfile(
