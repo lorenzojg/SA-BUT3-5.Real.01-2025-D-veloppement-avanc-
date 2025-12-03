@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'questionnaire_page.dart';
-import '../services/data_loader_service.dart';
+import '../services/data_loader_service.dart'; // ✅ Import du service de chargement
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,7 +25,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final dataLoader = DataLoaderService();
     try {
-      await dataLoader.loadInitialData();
+      await dataLoader.loadInitialData(); // Chargement de la DB
       print('✅ Initialisation terminée');
     } catch (e) {
       print('❌ Erreur d\'initialisation: $e');
@@ -36,6 +36,16 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
+  // Fonction de navigation
+  void _startQuestionnaire() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const QuestionnairePage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -43,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Stack(
         children: [
           _buildPhotoGrid(),
-          _buildMainContent(context),
+          _buildMainContent(),
           _buildLogo(),
 
           if (_isLoading)
@@ -58,12 +68,11 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Widget _buildMainContent(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40.0),
+  Widget _buildMainContent() {
+    return Positioned.fill(
+      child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
             const Icon(Icons.flight, size: 60, color: Colors.white),
             const SizedBox(height: 30),
@@ -79,32 +88,26 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 50),
-            ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const QuestionnairePage(),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 100),
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _startQuestionnaire,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF1a3a52),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 40, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
                   ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF1a3a52),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 50,
-                  vertical: 16,
+                  elevation: 5,
+                  disabledBackgroundColor: Colors.white.withOpacity(0.5),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
+                child: Text(
+                  _isLoading ? 'Chargement...' : 'Commencer',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w500),
                 ),
-                elevation: 4,
-              ),
-              child: Text(
-                _isLoading ? 'Chargement...' : 'Commencer',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -113,11 +116,10 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  // ... reste du code (buildPhotoGrid, buildLogo)
-
+  // Placeholders pour les images de fond
   Widget _buildPhotoGrid() {
     return Opacity(
-      opacity: 0.4,
+      opacity: 0.2,
       child: Row(
         children: [
           Expanded(
@@ -125,9 +127,6 @@ class _SplashScreenState extends State<SplashScreen> {
               children: [
                 _buildPhotoItem('assets/images/travel1.jpeg'),
                 _buildPhotoItem('assets/images/travel2.jpeg'),
-                _buildPhotoItem('assets/images/travel3.jpeg'),
-                _buildPhotoItem('assets/images/travel4.jpeg'),
-                _buildPhotoItem('assets/images/travel5.jpeg'),
               ],
             ),
           ),
@@ -135,11 +134,8 @@ class _SplashScreenState extends State<SplashScreen> {
           Expanded(
             child: Column(
               children: [
-                _buildPhotoItem('assets/images/travel6.jpeg'),
-                _buildPhotoItem('assets/images/travel7.jpeg'),
-                _buildPhotoItem('assets/images/travel8.jpeg'),
-                _buildPhotoItem('assets/images/travel9.jpeg'),
-                _buildPhotoItem('assets/images/travel10.jpeg'),
+                _buildPhotoItem('assets/images/travel3.jpeg'),
+                _buildPhotoItem('assets/images/travel4.jpeg'),
               ],
             ),
           ),
@@ -149,12 +145,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildPhotoItem(String imagePath) {
+    // Si l'image n'existe pas, utilise un Container
     return Expanded(
       child: Container(
         decoration: BoxDecoration(
+          color: Colors.black, // Couleur de remplacement
           image: DecorationImage(
             image: AssetImage(imagePath),
             fit: BoxFit.cover,
+            onError: (exception, stackTrace) => {},
           ),
         ),
       ),
@@ -171,10 +170,8 @@ class _SplashScreenState extends State<SplashScreen> {
           'Serendia',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w300,
-            fontStyle: FontStyle.italic,
-            letterSpacing: 1,
+            fontSize: 36,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),

@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
-import '../services/database_service.dart';
+// Importez vos pages personnalisées
+import 'questionnaire_page_continents.dart';
+import 'questionnaire_page_detente_sportif.dart';
+import 'questionnaire_page_budget.dart';
+import 'questionnaire_page_travelers.dart';
+import 'questionnaire_page_ville_nature.dart';
+import 'questionnaire_page_climat.dart';
 import 'recommendations_page.dart';
-
 
 class QuestionnairePage extends StatefulWidget {
   const QuestionnairePage({super.key});
@@ -12,35 +17,77 @@ class QuestionnairePage extends StatefulWidget {
 }
 
 class _QuestionnairePageState extends State<QuestionnairePage> {
-  int currentQuestionIndex = 0;
-  final List<Question> questions = QuestionnaireData.getQuestions();
+  final PageController _pageController = PageController();
   final UserPreferences userPreferences = UserPreferences();
-  final DatabaseService _dbService = DatabaseService();
+  int _currentPage = 0;
+  
+  // Liste des étapes (pages) du questionnaire
+  late final List<Widget> _questionnairePages;
 
-  void _selectAnswer(String answer) {
-    setState(() {
-      userPreferences.setAnswer(currentQuestionIndex, answer);
-    });
+  @override
+  void initState() {
+    super.initState();
+    // Le callback _nextPage permet de passer à la page suivante
+    // Le callback _finishQuestionnaire est passé à la dernière étape
+    _questionnairePages = [
+      // Étape 1 : Continents
+      ContinentSelectionPage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      // Étape 2 : Type de Voyageurs (Ajouté)
+      TravelersSelectionPage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      // Étape 3 : Ville vs Nature
+      VilleNaturePage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      // Étape 4 : Climat
+      ClimatPage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      // Étape 5 : Activité
+      ActivityTypePage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      // Étape 4 : Budget (la dernière appelle _finishQuestionnaire)
+      BudgetSelectionPage(
+        onFinish: _finishQuestionnaire,
+        preferences: userPreferences,
+      ),
+    ];
   }
 
-  void _nextQuestion() async {
-    if (currentQuestionIndex < questions.length - 1) {
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+  
+  void _nextPage() {
+    // Navigue vers l'étape suivante
+    if (_currentPage < _questionnairePages.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
       setState(() {
-        currentQuestionIndex++;
+        _currentPage++;
       });
-    } else {
-      await _saveUserPreferences();
-      _showResults();
     }
   }
 
-  Future<void> _saveUserPreferences() async {
-    // Enregistrer les préférences de l'utilisateur
-    print('💾 Préférences sauvegardées');
-  }
-
-  void _showResults() {
-    // ✅ Naviguer vers la page de recommandations
+  void _finishQuestionnaire() {
+    // Fonction appelée lorsque l'utilisateur a répondu à toutes les questions
+    print('✅ Questionnaire Terminé. Préférences:');
+    print(userPreferences.toString());
+    
+    // Naviguer vers la page de recommandations
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -53,131 +100,70 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentQuestion = questions[currentQuestionIndex];
-    final selectedAnswer = userPreferences.getAnswer(currentQuestionIndex);
-
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1a3a52),
+        elevation: 0,
+        leading: _currentPage > 0
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: _previousPage,
+              )
+            : null,
+      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(40.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildQuestionTitle(currentQuestion),
-              const SizedBox(height: 30),
-              _buildOptionsContainer(currentQuestion, selectedAnswer),
-              const SizedBox(height: 30),
-              _buildNextButton(selectedAnswer),
-              const SizedBox(height: 20),
-              _buildProgressIndicator(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuestionTitle(Question question) {
-    return Text(
-      question.title,
-      textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 18,
-        fontWeight: FontWeight.w300,
-        height: 1.6,
-      ),
-    );
-  }
-
-  Widget _buildOptionsContainer(Question question, String? selectedAnswer) {
-    return Container(
-      padding: const EdgeInsets.all(30),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          if (question.subtitle != null) ...[
-            Text(
-              question.subtitle!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
+        child: Column(
+          children: [
+            // Indicateur de progression en haut
+            _buildProgressIndicator(),
+            
+            // Le PageView gère les étapes du questionnaire
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                // Empêche le glissement manuel (on utilise les boutons 'Suivant')
+                physics: const NeverScrollableScrollPhysics(), 
+                children: _questionnairePages,
               ),
             ),
-            const SizedBox(height: 20),
           ],
-          ...question.options.map(
-                (option) => _buildOptionButton(option, selectedAnswer),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOptionButton(String option, String? selectedAnswer) {
-    final isSelected = selectedAnswer == option;
-
-    return GestureDetector(
-      onTap: () => _selectAnswer(option),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withOpacity(0.25)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border(
-            left: BorderSide(
-              color: isSelected ? Colors.white : Colors.transparent,
-              width: 3,
-            ),
-          ),
-        ),
-        child: Text(
-          '• $option',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-          ),
         ),
       ),
     );
   }
-
-  Widget _buildNextButton(String? selectedAnswer) {
-    return ElevatedButton(
-      onPressed: selectedAnswer != null ? _nextQuestion : null,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1a3a52),
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
-        ),
-        elevation: 4,
-        disabledBackgroundColor: Colors.white.withOpacity(0.5),
-      ),
-      child: Text(
-        currentQuestionIndex == questions.length - 1 ? 'Terminer' : 'Suivant',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-      ),
-    );
+  
+  void _previousPage() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() {
+        _currentPage--;
+      });
+    } else {
+      Navigator.pop(context); // Retour à la splash screen
+    }
   }
 
   Widget _buildProgressIndicator() {
-    return Text(
-      'Question ${currentQuestionIndex + 1}/${questions.length}',
-      style: TextStyle(
-        color: Colors.white.withOpacity(0.7),
-        fontSize: 14,
+    final totalPages = _questionnairePages.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Column(
+        children: [
+          LinearProgressIndicator(
+            value: (_currentPage + 1) / totalPages,
+            backgroundColor: Colors.white.withOpacity(0.3),
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Étape ${_currentPage + 1} sur $totalPages',
+            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          ),
+        ],
       ),
     );
   }
