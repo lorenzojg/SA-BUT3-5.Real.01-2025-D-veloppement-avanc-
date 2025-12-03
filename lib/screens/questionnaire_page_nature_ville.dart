@@ -27,12 +27,7 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
   }
 
   void _nextQuestion() {
-    // ✅ Sauvegarder les données dans l'objet de préférences
     widget.preferences.activityLevel = _activityLevel;
-    
-    print('Niveau d\'environnement sélectionné: $_activityLevel - $_activityDescription');
-    
-    // Appeler le callback de navigation
     widget.onNext();
   }
 
@@ -41,17 +36,19 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildQuestionTitle(),
-              const SizedBox(height: 50),
-              _buildActivitySlider(),
-              const SizedBox(height: 50),
-              _buildNextButton(),
-            ],
+        child: SingleChildScrollView( // ⬅️ Ajout scroll
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildQuestionTitle(),
+                const SizedBox(height: 50),
+                _buildActivitySlider(),
+                const SizedBox(height: 50),
+                _buildNextButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -87,19 +84,16 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
           divisions: 100,
           label: _activityLevel.round().toString(),
           activeColor: Colors.white,
-          inactiveColor: Colors.white.withOpacity(0.3),
-          onChanged: (double value) {
-            // ✅ Mettre à jour l'état du curseur
-            setState(() {
-              _activityLevel = value;
-            });
+          inactiveColor: Colors.white54,
+          onChanged: (value) {
+            setState(() => _activityLevel = value);
           },
         ),
         const SizedBox(height: 30),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white12,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -125,13 +119,8 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(30),
         ),
-        elevation: 4,
       ),
-      child: const Text(
-        'Suivant',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-      ),
+      child: const Text('Suivant'),
     );
   }
-
 }

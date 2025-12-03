@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
 import '../models/questionnaire_model.dart';
@@ -25,17 +27,37 @@ class RecommendationsPage extends StatefulWidget {
 class _RecommendationsPageState extends State<RecommendationsPage> {
   final DatabaseService _dbService = DatabaseService();
   final FavoritesService _favoritesService = FavoritesService();
-  List<Destination> _destinations = [];
-  bool _isLoading = true;
-  Map<String, dynamic>? _stats;
+
   List<Destination> _allDestinations = [];
+  List<Destination> _destinations = []; // ordered recommendations
+
+  bool _isLoading = true;
+
+  // Favorites
   Set<String> _favoriteIds = {};
+
+  // --- Mini-jeu state ---
+  bool _gameStarted = false;
+  int _currentRound = 0; // 1..5
+  Destination? _currentChoice;
+  final Set<String> _gameSeenIds = {}; // éviter répétitions pendant le jeu
+  final Set<String> _likedIds = {};
+  final Set<String> _dislikedIds = {};
+
+  // Carousel controller
+  final ScrollController _carouselController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadRecommendations();
     _loadFavorites();
+  }
+
+  @override
+  void dispose() {
+    _carouselController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadFavorites() async {
@@ -46,91 +68,60 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   }
 
   Future<void> _loadRecommendations() async {
-    print('🔄 Chargement des destinations depuis SQLite...');
-
+    setState(() => _isLoading = true);
     try {
       _allDestinations = await _dbService.getAllDestinations();
-      print('📊 ${_allDestinations.length} destinations en base');
-      
-      print('\n🎯 Préférences utilisateur :');
-      print(widget.userPreferences.toString());
 
-      final recommendedDestinations = RecommendationService.filterAndSortDestinations(
+      // Filtrer / trier via le service existant
+      final recommended = RecommendationService.filterAndSortDestinations(
         _allDestinations,
-        widget.userPreferences,
-      );
-
-      print('\n✅ ${recommendedDestinations.length} destinations correspondent aux critères');
-      
-      final stats = RecommendationService.getRecommendationStats(
-        _allDestinations,
-        recommendedDestinations,
         widget.userPreferences,
       );
 
       setState(() {
-        _destinations = recommendedDestinations;
-        _stats = stats;
+        _destinations = recommended;
         _isLoading = false;
       });
-
-      print('\n📈 Statistiques : ${stats['matchingDestinations']}/${stats['totalDestinations']} destinations (${stats['filterRate']})');
     } catch (e) {
-      print('❌ ERREUR lors du chargement des recommandations: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      print('Erreur chargement destinations: $e');
+      setState(() => _isLoading = false);
     }
   }
 
   void _navigateToPage(String page) {
-    Navigator.pop(context); // Fermer le drawer
+    Navigator.pop(context);
 
     switch (page) {
       case 'contact':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ContactPage()),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactPage()));
         break;
       case 'about':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AboutPage()),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()));
         break;
       case 'reset':
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => ResetPreferencesPage(
-              userPreferences: widget.userPreferences,
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => ResetPreferencesPage(userPreferences: widget.userPreferences)),
         );
         break;
       case 'favorites':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const FavoritesPage()),
-        ).then((_) => _loadFavorites()); // Recharger les favoris au retour
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))
+            .then((_) => _loadFavorites());
         break;
       case 'home':
-        // Déjà sur la page d'accueil
+        // nothing
         break;
     }
   }
 
+  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1a3a52),
-        title: const Text(
-          'Destinations recommandées',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Destinations recommandées', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         leading: Builder(
           builder: (context) => IconButton(
@@ -148,10 +139,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               DrawerHeader(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.shade900,
-                      Colors.blue.shade700,
-                    ],
+                    colors: [Colors.blue.shade900, Colors.blue.shade700],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -160,35 +148,14 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Icon(
-                      Icons.travel_explore,
-                      size: 60,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
+                    Icon(Icons.travel_explore, size: 60, color: Colors.white.withOpacity(0.9)),
                     const SizedBox(height: 10),
-                    const Text(
-                      'Serendia',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Votre guide voyage',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 14,
-                      ),
-                    ),
+                    const Text('Serendia', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                    Text('Votre guide voyage', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
                   ],
                 ),
               ),
-              _buildDrawerItem(
-                icon: Icons.home,
-                title: 'Accueil',
-                onTap: () => _navigateToPage('home'),
-              ),
+              _buildDrawerItem(icon: Icons.home, title: 'Accueil', onTap: () => _navigateToPage('home')),
               const Divider(color: Colors.white24),
               _buildDrawerItem(
                 icon: Icons.favorite,
@@ -196,56 +163,20 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                 badge: _favoriteIds.isNotEmpty ? _favoriteIds.length : null,
                 onTap: () => _navigateToPage('favorites'),
               ),
-              _buildDrawerItem(
-                icon: Icons.refresh,
-                title: 'Recommencer',
-                onTap: () => _navigateToPage('reset'),
-              ),
-              _buildDrawerItem(
-                icon: Icons.info_outline,
-                title: 'À propos',
-                onTap: () => _navigateToPage('about'),
-              ),
-              _buildDrawerItem(
-                icon: Icons.email_outlined,
-                title: 'Contactez-nous',
-                onTap: () => _navigateToPage('contact'),
-              ),
+              _buildDrawerItem(icon: Icons.refresh, title: 'Recommencer', onTap: () => _navigateToPage('reset')),
+              _buildDrawerItem(icon: Icons.info_outline, title: 'À propos', onTap: () => _navigateToPage('about')),
+              _buildDrawerItem(icon: Icons.email_outlined, title: 'Contactez-nous', onTap: () => _navigateToPage('contact')),
             ],
           ),
         ),
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            )
-          : _destinations.isEmpty
-              ? _buildEmptyState()
-              : Column(
-                  children: [
-                    if (_stats != null) _buildStatsHeader(),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: _destinations.length,
-                        itemBuilder: (context, index) {
-                          final destination = _destinations[index];
-                          final rank = index + 1;
-                          return _buildDestinationCard(destination, rank);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : _buildContent(),
     );
   }
 
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    int? badge,
-  }) {
+  Widget _buildDrawerItem({required IconData icon, required String title, required VoidCallback onTap, int? badge}) {
     return ListTile(
       leading: Stack(
         clipBehavior: Clip.none,
@@ -257,425 +188,451 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               top: -4,
               child: Container(
                 padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 18,
-                  minHeight: 18,
-                ),
-                child: Text(
-                  badge > 99 ? '99+' : '$badge',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                child: Text(badge > 99 ? '99+' : '$badge', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
               ),
             ),
         ],
       ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
       onTap: onTap,
       hoverColor: Colors.white.withOpacity(0.1),
     );
   }
 
-  Widget _buildStatsHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
+  Widget _buildContent() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${_stats!['matchingDestinations']} destinations trouvées',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const Divider(color: Colors.white30, height: 20),
-          _buildStatRow('Budget', _stats!['budget']),
-          _buildStatRow('Activité', _stats!['activity']),
-          _buildStatRow('Continents', _stats!['continent']),
+          const SizedBox(height: 20),
+
+          // 1) Recommandation principale (grand bloc)
+          _buildMainRecommendation(),
+
+          const SizedBox(height: 20),
+
+          // 2) Mini-jeu interactif
+          _buildInteractiveGameBox(),
+
+          const SizedBox(height: 20),
+
+          // 3) Carrousel de suggestions
+          _buildSimilarDestinationsCarousel(),
+
+          const SizedBox(height: 30),
         ],
       ),
     );
   }
-  
-  Widget _buildStatRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+  // ---------------- Main Recommendation ----------------
+  Widget _buildMainRecommendation() {
+    if (_destinations.isEmpty) {
+      return _buildEmptyStateReplacement();
+    }
+
+    final Destination best = _destinations.first;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade900,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$label:',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 14,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Meilleure recommandation', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+                    const SizedBox(height: 6),
+                    Text(best.name, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('${best.country} • ${best.continent}', style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 12),
+                    Text(best.description, style: const TextStyle(color: Colors.white, height: 1.4), maxLines: 4, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
-              textAlign: TextAlign.right,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.amber.shade700.withOpacity(0.9), borderRadius: BorderRadius.circular(16)),
+                    child: Text('#1', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(16)),
+                    child: Text('${best.averageCost.toInt()}\$/jour', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 8),
+                  IconButton(
+                    icon: Icon(_favoriteIds.contains(best.id) ? Icons.favorite : Icons.favorite_border, color: _favoriteIds.contains(best.id) ? Colors.red : Colors.white),
+                    onPressed: () async {
+                      await _favoritesService.toggleFavorite(best.id);
+                      await _loadFavorites();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_favoriteIds.contains(best.id) ? '💛 Ajouté aux favoris' : 'Retiré des favoris')));
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyStateReplacement() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(30),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        children: [
+          const Icon(Icons.travel_explore, size: 60, color: Colors.white54),
+          const SizedBox(height: 12),
+          const Text('Aucune recommandation disponible', style: TextStyle(color: Colors.white, fontSize: 18)),
+          const SizedBox(height: 8),
+          const Text('Essayez de modifier vos préférences', style: TextStyle(color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Interactive Game Box ----------------
+  Widget _buildInteractiveGameBox() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      height: 320,
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(16)),
+      child: !_gameStarted ? _buildStartScreen() : _buildGameRound(),
+    );
+  }
+
+  Widget _buildStartScreen() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.travel_explore,
-            size: 80,
-            color: Colors.white54,
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Aucune destination trouvée',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text('Mini-jeu : 5 choix rapides', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 18)),
           const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Essayez de modifier vos critères de recherche',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Text('Appuie sur START pour commencer. Pour chaque destination : Like / Dislike / Favoris.',
+                style: TextStyle(color: Colors.white.withOpacity(0.8)), textAlign: TextAlign.center),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
+              _startGame();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1a3a52),
-            ),
-            child: const Text('Modifier les préférences'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade600),
+            child: const Text('START'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDestinationCard(Destination destination, int rank) {
-    final activityMatch = widget.userPreferences.activityLevel != null
-        ? 100 - (destination.activityScore - widget.userPreferences.activityLevel!).abs().round()
-        : 0;
-    
-    final isFavorite = _favoriteIds.contains(destination.id);
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DestinationDetailPage(
-                destination: destination,
-                rank: rank,
-              ),
-            ),
-          ).then((_) => _loadFavorites()); // Recharger les favoris au retour
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                Colors.blue.shade900,
-                Colors.blue.shade700,
-              ],
-            ),
+  void _startGame() {
+    if (_allDestinations.isEmpty) return;
+
+    setState(() {
+      _gameStarted = true;
+      _currentRound = 1;
+      _gameSeenIds.clear();
+      _likedIds.clear();
+      _dislikedIds.clear();
+      _currentChoice = _getRandomUnseenDestination();
+      if (_currentChoice != null) _gameSeenIds.add(_currentChoice!.id);
+    });
+  }
+
+  Widget _buildGameRound() {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top row: compteur et "Favoris"
+          Row(
+            children: [
+              Text('$_currentRound / 5', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              Text('Favoris', style: TextStyle(color: Colors.white.withOpacity(0.9))),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            destination.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on,
-                                  color: Colors.white70, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${destination.country} • ${destination.continent}',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+
+          const SizedBox(height: 10),
+
+          // Destination affichée
+          Expanded(
+            child: _currentChoice == null
+                ? Center(child: Text('Aucune destination disponible', style: TextStyle(color: Colors.white70)))
+                : Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: Colors.blue.shade800, borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade700.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '#$rank',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        Text(_currentChoice!.name, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Text('${_currentChoice!.country} • ${_currentChoice!.continent}', style: const TextStyle(color: Colors.white70)),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: Text(_currentChoice!.description, style: const TextStyle(color: Colors.white, height: 1.3), overflow: TextOverflow.fade),
                         ),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${destination.averageCost.toInt()}\$/jour',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        Wrap(
+                          spacing: 8,
+                          children: _currentChoice!.activities.take(4).map((a) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                            child: Text(a, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                          )).toList(),
                         ),
                       ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.star,
-                      color: Colors.amber.shade300,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      destination.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    if (widget.userPreferences.activityLevel != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.lightGreen.shade700.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.lightGreen.shade300,
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          'Match Activité: $activityMatch%',
-                          style: TextStyle(
-                            color: Colors.lightGreen.shade300,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(width: 16),
-                    if (destination.unescoSite) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade700.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.amber.shade300,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.verified,
-                              color: Colors.amber.shade300,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'UNESCO',
-                              style: TextStyle(
-                                color: Colors.amber.shade300,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: isFavorite ? Colors.red : Colors.white,
-                      ),
-                      onPressed: () async {
-                        await _favoritesService.toggleFavorite(destination.id);
-                        await _loadFavorites();
-                        
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                isFavorite 
-                                    ? 'Retiré des favoris' 
-                                    : '💛 Ajouté aux favoris',
-                              ),
-                              duration: const Duration(seconds: 2),
-                              backgroundColor: isFavorite ? Colors.orange : Colors.green,
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  destination.description,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    height: 1.5,
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+          ),
+
+          const SizedBox(height: 12),
+
+          // Bottom row: dislike - fav - like
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Dislike
+              Column(
+                children: [
+                  IconButton(
+                    onPressed: () => _onUserChoice('dislike'),
+                    icon: const Icon(Icons.thumb_down, size: 28, color: Colors.red),
+                  ),
+                  Text('Dislike', style: TextStyle(color: Colors.white.withOpacity(0.85))),
+                ],
+              ),
+
+              // Favorite (middle)
+              Column(
+                children: [
+                  IconButton(
+                    onPressed: () async {
+                      if (_currentChoice == null) return;
+                      await _favoritesService.toggleFavorite(_currentChoice!.id);
+                      await _loadFavorites();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_favoriteIds.contains(_currentChoice!.id) ? '💛 Ajouté aux favoris' : 'Retiré des favoris')));
+                      }
+                    },
+                    icon: Icon(_currentChoice != null && _favoriteIds.contains(_currentChoice!.id) ? Icons.favorite : Icons.favorite_border, size: 32, color: Colors.amber),
+                  ),
+                  Text('Favoris', style: TextStyle(color: Colors.white.withOpacity(0.85))),
+                ],
+              ),
+
+              // Like
+              Column(
+                children: [
+                  IconButton(
+                    onPressed: () => _onUserChoice('like'),
+                    icon: const Icon(Icons.thumb_up, size: 28, color: Colors.green),
+                  ),
+                  Text('Like', style: TextStyle(color: Colors.white.withOpacity(0.85))),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Traitement d'un like/dislike
+  void _onUserChoice(String action) {
+    if (_currentChoice == null) return;
+
+    // Envoyer au "backend" (placeholder)
+    _sendDecisionToBackend(_currentChoice!, action);
+
+    // Mémoriser localement
+    setState(() {
+      if (action == 'like') {
+        _likedIds.add(_currentChoice!.id);
+      } else if (action == 'dislike') {
+        _dislikedIds.add(_currentChoice!.id);
+      }
+    });
+
+    // Snack
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(action == 'like' ? '👍 Liked' : '👎 Disliked')));
+    }
+
+    // Avancer
+    if (_currentRound >= 5) {
+      _finishGameAndRecompute();
+    } else {
+      setState(() {
+        _currentRound++;
+        _currentChoice = _getRandomUnseenDestination();
+        if (_currentChoice != null) _gameSeenIds.add(_currentChoice!.id);
+      });
+    }
+  }
+
+  void _sendDecisionToBackend(Destination d, String action) {
+    // OPTION 3: Placeholder local logging. Remplacer par un appel HTTP ou service quand prêt.
+    print('FEEDBACK (placeholder): ${d.id} -> $action');
+  }
+
+  Destination? _getRandomUnseenDestination() {
+    final candidates = _allDestinations.where((d) => !_gameSeenIds.contains(d.id)).toList();
+    if (candidates.isEmpty) return null;
+    candidates.shuffle(Random());
+    return candidates.first;
+  }
+
+  void _finishGameAndRecompute() {
+    // Recalculer la recommandation principale en tenant compte des likes/dislikes
+    // Stratégie locale simple :
+    // - boost des destinations aimées
+    // - penalisation des destinations disliked
+    // - garder l'ordre original sinon
+
+    final likedSet = _likedIds;
+    final dislikedSet = _dislikedIds;
+
+    // Map des scores temporaires
+    final Map<String, double> scoreMap = {};
+
+    for (var i = 0; i < _allDestinations.length; i++) {
+      final d = _allDestinations[i];
+      double base = 0.0;
+
+      // Base: si présent dans _destinations (pré-sélection), on donne un petit boost selon l'index
+      final idx = _destinations.indexWhere((e) => e.id == d.id);
+      if (idx >= 0) base += (100 - idx.toDouble());
+
+      if (likedSet.contains(d.id)) base += 500; // fort boost si aimé
+      if (dislikedSet.contains(d.id)) base -= 250; // pénalité si disliked
+
+      // Ajuster aussi par rating / averageCost / activityScore si nécessaire
+      base += d.rating * 10;
+
+      scoreMap[d.id] = base;
+    }
+
+    // Trier selon scoreMap
+    final newList = List<Destination>.from(_allDestinations);
+    newList.sort((a, b) => (scoreMap[b.id] ?? 0).compareTo(scoreMap[a.id] ?? 0));
+
+    setState(() {
+      _destinations = newList;
+      // reset état du mini-jeu
+      _gameStarted = false;
+      _currentRound = 0;
+      _currentChoice = null;
+      _gameSeenIds.clear();
+      // note: liked/dislikedIds restent éventuellement sauvegardés pour analytics
+    });
+
+    // Retour utilisateur
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Terminé — recommandations mises à jour')));
+    }
+  }
+
+  // ---------------- Carousel ----------------
+  Widget _buildSimilarDestinationsCarousel() {
+    // Exclure la première (main) pour le carrousel
+    final list = _destinations.length > 1 ? _destinations.sublist(1) : [];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Vous pourriez aussi aimer', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 170,
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => _scrollCarousel(-300),
+                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70),
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: destination.activities.take(5).map((activity) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        activity,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
+                Expanded(
+                  child: list.isEmpty
+                      ? Center(child: Text('Pas d\'autres suggestionsns', style: TextStyle(color: Colors.white70)))
+                      : ListView.builder(
+                          controller: _carouselController,
+                          scrollDirection: Axis.horizontal,
+                          itemCount: list.length,
+                          itemBuilder: (context, index) {
+                            final d = list[index];
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => DestinationDetailPage(destination: d, rank: index + 2)))
+                                    .then((_) => _loadFavorites());
+                              },
+                              child: Container(
+                                width: 160,
+                                margin: const EdgeInsets.only(right: 12),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: Colors.blue.shade700, borderRadius: BorderRadius.circular(12)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(d.name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 6),
+                                    Text(d.country, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                    const SizedBox(height: 8),
+                                    Text(d.description, style: const TextStyle(color: Colors.white70, fontSize: 11), maxLines: 4, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      ),
-                    );
-                  }).toList(),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Voir les détails',
-                      style: TextStyle(
-                        color: Colors.blue.shade200,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.blue.shade200,
-                      size: 14,
-                    ),
-                  ],
+                IconButton(
+                  onPressed: () => _scrollCarousel(300),
+                  icon: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  void _scrollCarousel(double offset) {
+    final newOffset = _carouselController.offset + offset;
+    _carouselController.animateTo(
+      newOffset.clamp(0.0, _carouselController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
     );
   }
 }

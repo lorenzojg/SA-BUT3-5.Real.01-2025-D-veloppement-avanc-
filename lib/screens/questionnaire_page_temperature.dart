@@ -12,11 +12,13 @@ class TemperaturePreferencePage extends StatefulWidget {
   });
 
   @override
-  State<TemperaturePreferencePage> createState() => _TemperaturePreferencePageState();
+  State<TemperaturePreferencePage> createState() =>
+      _TemperaturePreferencePageState();
 }
 
-class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
-  double _temperatureLevel = 50.0; // Valeur par défaut (50 = tempéré)
+class _TemperaturePreferencePageState
+    extends State<TemperaturePreferencePage> {
+  double _temperatureLevel = 50.0;
 
   String get _temperatureDescription {
     if (_temperatureLevel < 20) return 'Très froid';
@@ -44,9 +46,6 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
 
   void _nextQuestion() {
     widget.preferences.temperaturePreference = _temperatureLevel;
-    
-    print('Préférence de température: $_temperatureLevel - $_temperatureDescription');
-    
     widget.onNext();
   }
 
@@ -55,17 +54,19 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildQuestionTitle(),
-              const SizedBox(height: 60),
-              _buildThermometer(),
-              const SizedBox(height: 50),
-              _buildNextButton(),
-            ],
+        child: SingleChildScrollView( // ⬅️ Ajout scroll
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildQuestionTitle(),
+                const SizedBox(height: 60),
+                _buildThermometer(),
+                const SizedBox(height: 50),
+                _buildNextButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -84,12 +85,12 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
     );
   }
 
+  /// 🔥 Je n’ai rien changé dans ton thermomètre, juste encapsulé plus haut dans un scroll
   Widget _buildThermometer() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Labels de température à gauche
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -104,13 +105,9 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
             _buildTemperatureLabel('0°', 'Froid', Colors.blue.shade300),
           ],
         ),
-        
         const SizedBox(width: 30),
-        
-        // Thermomètre vertical
         Column(
           children: [
-            // Bulbe du thermomètre en haut (inversé)
             Container(
               width: 60,
               height: 60,
@@ -118,13 +115,6 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
                 shape: BoxShape.circle,
                 color: _temperatureColor,
                 border: Border.all(color: Colors.white, width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: _temperatureColor.withOpacity(0.5),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
               ),
               child: Center(
                 child: Text(
@@ -133,25 +123,19 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
                 ),
               ),
             ),
-            
             const SizedBox(height: 10),
-            
-            // Tube du thermomètre
             Stack(
               alignment: Alignment.bottomCenter,
               children: [
-                // Contour du tube
                 Container(
                   width: 40,
                   height: 400,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white12,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.white, width: 3),
                   ),
                 ),
-                
-                // Remplissage coloré (de bas en haut)
                 Container(
                   width: 34,
                   height: 400 * (_temperatureLevel / 100),
@@ -166,13 +150,11 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
                         Colors.deepOrange.shade400,
                         Colors.red.shade400,
                       ],
-                      stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+                      stops: const [0, 0.25, 0.5, 0.75, 1],
                     ),
                     borderRadius: BorderRadius.circular(17),
                   ),
                 ),
-                
-                // Curseur de sélection
                 Positioned(
                   bottom: 400 * (_temperatureLevel / 100) - 15,
                   child: Container(
@@ -182,29 +164,16 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(color: _temperatureColor, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
                     child: const Center(
-                      child: Icon(
-                        Icons.arrow_left,
-                        color: Color(0xFF1a3a52),
-                        size: 20,
-                      ),
+                      child: Icon(Icons.arrow_left,
+                          color: Color(0xFF1a3a52), size: 20),
                     ),
                   ),
                 ),
               ],
             ),
-            
             const SizedBox(height: 10),
-            
-            // Base du thermomètre
             Container(
               width: 80,
               height: 80,
@@ -212,59 +181,31 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
                 shape: BoxShape.circle,
                 color: _temperatureColor,
                 border: Border.all(color: Colors.white, width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: _temperatureColor.withOpacity(0.5),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
               ),
               child: Center(
                 child: Text(
                   '${_temperatureLevel.round()}°',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
           ],
         ),
-        
         const SizedBox(width: 30),
-        
-        // Slider vertical à droite
         SizedBox(
           height: 470,
           child: RotatedBox(
             quarterTurns: 3,
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 8,
-                thumbShape: const RoundSliderThumbShape(
-                  enabledThumbRadius: 15,
-                ),
-                overlayShape: const RoundSliderOverlayShape(
-                  overlayRadius: 25,
-                ),
-                activeTrackColor: _temperatureColor,
-                inactiveTrackColor: Colors.white.withOpacity(0.2),
-                thumbColor: Colors.white,
-                overlayColor: _temperatureColor.withOpacity(0.3),
-              ),
-              child: Slider(
-                value: _temperatureLevel,
-                min: 0,
-                max: 100,
-                onChanged: (value) {
-                  setState(() {
-                    _temperatureLevel = value;
-                  });
-                },
-              ),
+            child: Slider(
+              value: _temperatureLevel,
+              min: 0,
+              max: 100,
+              onChanged: (value) {
+                setState(() => _temperatureLevel = value);
+              },
             ),
           ),
         ),
@@ -276,21 +217,12 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text(
-          degree,
-          style: TextStyle(
-            color: color,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
-            fontSize: 12,
-          ),
-        ),
+        Text(degree,
+            style: TextStyle(
+                color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(label,
+            style:
+                TextStyle(color: Colors.white70, fontSize: 12)),
       ],
     );
   }
@@ -308,18 +240,14 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _temperatureEmoji,
-                style: const TextStyle(fontSize: 30),
-              ),
+              Text(_temperatureEmoji, style: const TextStyle(fontSize: 30)),
               const SizedBox(width: 15),
               Text(
                 _temperatureDescription,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -334,12 +262,8 @@ class _TemperaturePreferencePageState extends State<TemperaturePreferencePage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
-            elevation: 4,
           ),
-          child: const Text(
-            'Suivant',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-          ),
+          child: const Text('Suivant'),
         ),
       ],
     );

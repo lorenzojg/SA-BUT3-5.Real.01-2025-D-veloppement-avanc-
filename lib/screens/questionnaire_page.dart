@@ -28,11 +28,13 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
     super.initState();
     
     _questionnairePages = [
+      // Étape 1 : Température
       TemperaturePreferencePage(
         onNext: _nextPage,
         preferences: userPreferences,
       ),
       
+      // Étape 2 : Groupe
       TravelGroupPage(
         onNext: _nextPage,
         preferences: userPreferences,
