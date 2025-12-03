@@ -19,18 +19,18 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
   double _activityLevel = 50; // Valeur par défaut (50 = équilibre)
 
   String get _activityDescription {
-    if (_activityLevel < 20) return 'Très détente';
-    if (_activityLevel < 40) return 'Plutôt détente';
+    if (_activityLevel < 20) return 'Très campagne';
+    if (_activityLevel < 40) return 'Plutôt campagne';
     if (_activityLevel < 60) return 'Équilibré';
-    if (_activityLevel < 80) return 'Plutôt sportif';
-    return 'Très sportif';
+    if (_activityLevel < 80) return 'Plutôt ville';
+    return 'Très ville';
   }
 
   void _nextQuestion() {
     // ✅ Sauvegarder les données dans l'objet de préférences
     widget.preferences.activityLevel = _activityLevel;
     
-    print('Niveau d\'activité sélectionné: $_activityLevel - $_activityDescription');
+    print('Niveau d\'environnement sélectionné: $_activityLevel - $_activityDescription');
     
     // Appeler le callback de navigation
     widget.onNext();
@@ -60,7 +60,7 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
 
   Widget _buildQuestionTitle() {
     return const Text(
-      'Quel type de vacances recherchez-vous ?',
+      'Quel lieu de vacances recherchez-vous ?',
       textAlign: TextAlign.center,
       style: TextStyle(
         color: Colors.white,
@@ -76,8 +76,8 @@ class _ActivityTypePageState extends State<ActivityTypePage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: const [
-            Text('Détente', style: TextStyle(color: Colors.white)),
-            Text('Sportif', style: TextStyle(color: Colors.white)),
+            Text('Campagne', style: TextStyle(color: Colors.white)),
+            Text('Ville', style: TextStyle(color: Colors.white)),
           ],
         ),
         Slider(

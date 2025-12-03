@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
-// Importez vos pages personnalisées
+import 'questionnaire_page_temperature.dart';      
+import 'questionnaire_page_travel_groupe.dart';     
 import 'questionnaire_page_continents.dart';
 import 'questionnaire_page_detente_sportif.dart';
 import 'questionnaire_page_budget.dart';
@@ -25,20 +26,31 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   @override
   void initState() {
     super.initState();
-    // Le callback _nextPage permet de passer à la page suivante
-    // Le callback _finishQuestionnaire est passé à la dernière étape
+    
     _questionnairePages = [
-      // Étape 1 : Continents
+      TemperaturePreferencePage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      
+      TravelGroupPage(
+        onNext: _nextPage,
+        preferences: userPreferences,
+      ),
+      
+      // Étape 3 : Continents
       ContinentSelectionPage(
         onNext: _nextPage,
         preferences: userPreferences,
       ),
-      // Étape 2 : Activité
+      
+      // Étape 4 : Activité
       ActivityTypePage(
         onNext: _nextPage,
         preferences: userPreferences,
       ),
-      // Étape 3 : Budget (la dernière appelle _finishQuestionnaire)
+      
+      // Étape 5 : Budget (dernière étape)
       BudgetSelectionPage(
         onFinish: _finishQuestionnaire,
         preferences: userPreferences,
@@ -53,7 +65,6 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   }
   
   void _nextPage() {
-    // Navigue vers l'étape suivante
     if (_currentPage < _questionnairePages.length - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
@@ -66,7 +77,6 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   }
 
   void _finishQuestionnaire() {
-    // Fonction appelée lorsque l'utilisateur a répondu à toutes les questions
     print('✅ Questionnaire Terminé. Préférences:');
     print(userPreferences.toString());
     
@@ -105,8 +115,7 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
             Expanded(
               child: PageView(
                 controller: _pageController,
-                // Empêche le glissement manuel (on utilise les boutons 'Suivant')
-                physics: const NeverScrollableScrollPhysics(), 
+                physics: const NeverScrollableScrollPhysics(),
                 children: _questionnairePages,
               ),
             ),
@@ -126,7 +135,7 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
         _currentPage--;
       });
     } else {
-      Navigator.pop(context); // Retour à la splash screen
+      Navigator.pop(context);
     }
   }
 

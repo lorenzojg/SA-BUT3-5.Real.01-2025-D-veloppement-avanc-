@@ -109,11 +109,12 @@ class AboutPage extends StatelessWidget {
               title: 'Notre Mission',
               icon: Icons.flag_outlined,
               iconColor: Colors.amber.shade400,
-              content: 'Serendia a été créé pour transformer la façon dont vous '
-                  'découvrez vos destinations de voyage. Notre mission est de vous '
-                  'offrir une expérience de planification simple, personnalisée et '
-                  'inspirante, en vous proposant des recommandations qui correspondent '
-                  'vraiment à vos envies, votre budget et votre style de voyage.',
+              content: 'Serendia a été créé par un groupe de 7 étudiants, en dernière année d\'un BUT informatique'
+                  'pour transformer la façon dont vous découvrez vos destinations de voyage. '
+                  'Notre mission est de vous offrir une expérience de planification simple,'
+                  ' personnalisée et inspirante, en vous proposant des recommandations'
+                  ' qui correspondent vraiment à vos envies,'
+                  ' votre budget et votre style de voyage.',
             ),
             
             const SizedBox(height: 20),
@@ -126,9 +127,9 @@ class AboutPage extends StatelessWidget {
               content: 'Face aux milliers de destinations possibles, choisir peut '
                   'devenir stressant et chronophage. Nous avons créé Serendia pour '
                   'simplifier cette décision. Notre algorithme intelligent analyse '
-                  'vos préférences et vous suggère uniquement les destinations qui '
-                  'vous correspondent, vous permettant de vous concentrer sur '
-                  'l\'essentiel : l\'excitation de partir à l\'aventure.',
+                  'vos préférences et vos habitudes en vous suggérant uniquement les'
+                  ' destinations qui vous correspondent, vous permettant de vous '
+                  'concentrer sur l\'essentiel : l\'excitation de partir à l\'aventure.',
             ),
             
             const SizedBox(height: 20),
@@ -218,7 +219,7 @@ class AboutPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 15),
                 Text(
-                  '© 2024 Serendia\nTous droits réservés',
+                  '© 2025 Serendia\nTous droits réservés',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.5),
                     fontSize: 12,
@@ -327,8 +328,8 @@ class AboutPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _buildStep(1, 'Répondez à 3 questions simples', 
-              'Continent, activité et budget'),
+          _buildStep(1, 'Répondez à 6 questions simples', 
+              'Continent, paysage, activité, température, budget et nombre de voyageurs'),
           _buildStep(2, 'Notre algorithme analyse votre profil', 
               'Intelligence artificielle adaptative'),
           _buildStep(3, 'Découvrez vos destinations', 
@@ -531,7 +532,7 @@ class AboutPage extends StatelessWidget {
           _buildFeature('🌍', 'Base de données mondiale', 
               'Des centaines de destinations à travers le monde'),
           _buildFeature('🎯', 'Recommandations intelligentes', 
-              'Algorithme adaptatif basé sur vos préférences'),
+              'Algorithme adaptatif basé sur vos préférences et vos habitudes'),
           _buildFeature('💰', 'Filtres par budget', 
               'Trouvez des destinations adaptées à vos moyens'),
           _buildFeature('⚡', 'Performances optimales', 

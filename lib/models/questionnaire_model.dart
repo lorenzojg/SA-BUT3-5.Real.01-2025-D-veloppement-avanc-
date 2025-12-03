@@ -1,71 +1,61 @@
-class Question {
-  final String title;
-  final String? subtitle;
-  final List<String> options;
-
-  Question({
-    required this.title,
-    this.subtitle,
-    required this.options,
-  });
-}
-
-class QuestionnaireData {
-  static List<Question> getQuestions() {
-    // Les questions traditionnelles ne sont plus utilisées par le QuestionnairePage Manager
-    // mais sont conservées comme référence.
-    return [
-      Question(
-        title: 'Quelques petites questions avant de\ncommencer l\'expérience',
-        subtitle: 'Quel est votre budget du moment ?',
-        options: [
-          '< 500€',
-          '< 500€ et > 1000€',
-          '< 1000€ et > 2000€',
-          '> 2000€',
-          'Sans précision de budget',
-        ],
-      ),
-      Question(
-        title: 'Avez-vous un continent de\npréférence ?',
-        options: [
-          'Europe',
-          'Afrique',
-          'Amérique du Sud',
-          'Amérique du Nord',
-          'Océanie',
-          'Antarctique',
-          'Sans préférence',
-        ],
-      ),
-      Question(
-        title: 'A combien souhaiteriez vous partir ?',
-        options: [
-          'En solo',
-          'En famille',
-          'En couple',
-        ],
-      ),
-    ];
-  }
-}
-
 class UserPreferences {
-  // ✅ Champs pour les réponses du questionnaire par étapes (les seuls utilisés)
-  List<String> selectedContinents = []; // Sélection multiple
-  double? budgetLevel; // Valeur du curseur (0.0 à 4.0)
-  double? activityLevel; // Valeur du curseur (0.0 à 100.0)
+  // ===== PRÉFÉRENCES EXISTANTES =====
+  List<String>? selectedContinents;
+  double? activityLevel;
+  double? budgetLevel;
+  
+  // ===== NOUVELLES PRÉFÉRENCES =====
+  double? temperaturePreference;  // 0-100 (0=froid, 100=tropical)
+  String? travelGroup;            // 'solo', 'couple', 'friends', 'family'
+  int? travelGroupSize;           // Nombre de personnes (1, 2, 4)
 
-  // Anciens champs supprimés pour éviter la confusion dans le RecoService
+  UserPreferences({
+    this.selectedContinents,
+    this.activityLevel,
+    this.budgetLevel,
+    this.temperaturePreference,
+    this.travelGroup,
+    this.travelGroupSize,
+  });
 
   @override
   String toString() {
-    final budget = budgetLevel != null ? budgetLevel!.round() : 'N/A';
-    final activity = activityLevel != null ? activityLevel!.round() : 'N/A';
+    return '''
+    UserPreferences {
+      continents: $selectedContinents,
+      activityLevel: $activityLevel,
+      budgetLevel: $budgetLevel,
+      temperaturePreference: $temperaturePreference,
+      travelGroup: $travelGroup,
+      travelGroupSize: $travelGroupSize,
+    }
+    ''';
+  }
 
-    return 'UserPreferences: \n'
-        '  Continents: ${selectedContinents.join(', ')}\n'
-        '  Niveau Budget: $budget\n'
-        '  Niveau Activité: $activity';
+  // Méthode pour obtenir le label du groupe de voyage
+  String getTravelGroupLabel() {
+    switch (travelGroup) {
+      case 'solo':
+        return 'En solo';
+      case 'couple':
+        return 'En couple';
+      case 'friends':
+        return 'Entre ami(e)s';
+      case 'family':
+        return 'En famille';
+      default:
+        return 'Non défini';
+    }
+  }
+
+  // Méthode pour obtenir la description de la température
+  String getTemperatureLabel() {
+    if (temperaturePreference == null) return 'Non défini';
+    
+    if (temperaturePreference! < 20) return 'Très froid';
+    if (temperaturePreference! < 40) return 'Froid / Frais';
+    if (temperaturePreference! < 60) return 'Tempéré';
+    if (temperaturePreference! < 80) return 'Chaud';
+    return 'Très chaud / Tropical';
   }
 }
