@@ -1,0 +1,4 @@
+Worldwide_Travel...Climate + city_data -> Table Destination 100% complet & traduit
+Activities -> Table Activites 0%
+hotel_price_by_city -> à mettre dans Destination
+PrixMoyens -> nouvelle table 0%
