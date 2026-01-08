@@ -1,14 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../models/destination_model.dart';
-import '../models/questionnaire_model.dart';
-import '../models/user_interaction_model.dart';
-import '../models/user_profile_vector.dart';
-import '../services/database_service.dart';
-import '../services/recommendation_service.dart';
-import '../services/enhanced_recommendation_service.dart';
+import '../models/destination_v2.dart';
+import '../models/user_preferences_v2.dart';
+import '../services/recommendation_service_v2.dart';
+import '../services/user_learning_service.dart';
 import '../services/favorites_service.dart';
-import '../services/user_interaction_service.dart';
 import 'contact_page.dart';
 import 'about_page.dart';
 import 'reset_preferences_page.dart';
@@ -16,7 +12,7 @@ import 'favorites_page.dart';
 import 'destination_detail_page.dart';
 
 class RecommendationsPage extends StatefulWidget {
-  final UserPreferences userPreferences;
+  final UserPreferencesV2 userPreferences;
 
   const RecommendationsPage({
     super.key,
@@ -28,15 +24,14 @@ class RecommendationsPage extends StatefulWidget {
 }
 
 class _RecommendationsPageState extends State<RecommendationsPage> {
-  final DatabaseService _dbService = DatabaseService();
   final FavoritesService _favoritesService = FavoritesService();
-  final EnhancedRecommendationService _enhancedService = EnhancedRecommendationService();
+  final RecommendationServiceV2 _recoService = RecommendationServiceV2();
+  final UserLearningService _learningService = UserLearningService();
 
-  List<Destination> _allDestinations = [];
-  List<Destination> _destinations = []; // ordered recommendations
-  
-  // Profil utilisateur dynamique (évolue avec les interactions)
-  late UserProfileVector _currentUserProfile;
+  List<DestinationV2> _destinations = [];
+  List<DestinationV2> _gameDestinations = []; // Destinations pour le mini-jeu (tous continents)
+  List<RecommendationResult> _results = [];
+  late UserPreferencesV2 _userPreferences;
 
   bool _isLoading = true;
 
@@ -46,11 +41,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   // --- Mini-jeu state ---
   bool _gameStarted = false;
   int _currentRound = 0; // 1..5
-  Destination? _currentChoice;
+  DestinationV2? _currentChoice;
   final Set<String> _gameSeenIds = {}; // éviter répétitions pendant le jeu
   
-  // Pour mesurer le temps de réaction (Interaction Duration)
-  DateTime? _cardShownTime;
+  // Learning data for mini-game
+  final List<DestinationV2> _likedDestinations = [];
+  final List<DestinationV2> _dislikedDestinations = [];
 
   // Carousel controller
   final ScrollController _carouselController = ScrollController();
@@ -58,14 +54,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   @override
   void initState() {
     super.initState();
-    // Initialisation du profil vectoriel à partir des réponses statiques
-    _currentUserProfile = RecommendationService.createVectorFromPreferences(widget.userPreferences);
-    
-    // Initialiser le service enrichi
-    _enhancedService.initialize(preferences: widget.userPreferences);
-
+    _userPreferences = widget.userPreferences;
     _loadRecommendations();
     _loadFavorites();
+    _loadGameDestinations(); // Charger destinations pour mini-jeu
   }
 
   @override
@@ -82,23 +74,56 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   }
 
   Future<void> _loadRecommendations() async {
+    print('🔄 === CHARGEMENT DES RECOMMANDATIONS ===');
     setState(() => _isLoading = true);
     try {
-      _allDestinations = await _dbService.getAllDestinations();
-
-      // Utilisation de l'algorithme de recommandation enrichi
-      final recommended = await _enhancedService.getEnhancedRecommendations(
-        _allDestinations,
+      // Utilisation du système vectoriel avec 10% de sérendipité
+      final results = await _recoService.getRecommendationsVectorBased(
+        prefs: _userPreferences,
         limit: 20,
+        serendipityRatio: 0.10, // 10% de destinations surprenantes
+        includeRecentBias: true, // Effet de mode court terme
       );
 
+      print('📋 ${results.length} résultats obtenus');
+      
+      // Équilibrer les résultats par continent pour le carrousel
+      final balancedResults = _recoService.balanceByContinent(
+        recommendations: results,
+        prefs: _userPreferences,
+        targetCount: 20,
+      );
+      
       setState(() {
-        _destinations = recommended;
+        _results = balancedResults;
+        _destinations = balancedResults.map((r) => r.destination).toList();
         _isLoading = false;
       });
     } catch (e) {
-      print('Erreur chargement destinations: $e');
+      print('❌ Erreur chargement destinations: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Charge des destinations diversifiées (tous continents) pour le mini-jeu
+  /// 50% de sérendipité avec inversion UNIQUEMENT du continent
+  Future<void> _loadGameDestinations() async {
+    try {
+      // Utiliser le système vectoriel avec 50% de sérendipité (continent uniquement)
+      final results = await _recoService.getRecommendationsVectorBased(
+        prefs: _userPreferences,
+        limit: 20,
+        serendipityRatio: 0.50, // 50% sérendipité
+        includeRecentBias: false, // Pas d'effet de mode pour le jeu
+        continentOnlySerendipity: true, // UNIQUEMENT inverser le continent
+      );
+      
+      setState(() {
+        _gameDestinations = results.map((r) => r.destination).toList();
+      });
+      print('🎮 ${_gameDestinations.length} destinations chargées pour le mini-jeu (continent inversé)');
+    } catch (e) {
+      print('❌ Erreur chargement destinations jeu: $e');
     }
   }
 
@@ -273,19 +298,14 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
-  String _getBudgetLevel(double cost) {
-    if (cost < 100) return '€';
-    if (cost < 200) return '€€';
-    return '€€€';
-  }
-
   // ---------------- Main Recommendation ----------------
   Widget _buildMainRecommendation() {
-    if (_destinations.isEmpty) {
+    if (_results.isEmpty) {
       return _buildEmptyStateReplacement();
     }
 
-    final Destination best = _destinations.first;
+    final result = _results.first;
+    final best = result.destination;
     final isFavorite = _favoriteIds.contains(best.id);
 
     return GestureDetector(
@@ -336,27 +356,51 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               ],
             ),
             const SizedBox(height: 15),
+            
+            // Image de la destination
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/images/destinations/${best.id}.jpg',
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.landscape,
+                        size: 60,
+                        color: Colors.white.withOpacity(0.3),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 15),
+            
             Text(
-              best.name,
+              best.city,
               style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
             ),
             Text(
-              '${best.continent}, ${best.country}',
+              '${best.region}, ${best.country}',
               style: const TextStyle(color: Colors.white70, fontSize: 16),
             ),
             const SizedBox(height: 20),
             Row(
               children: [
-                _buildTag(Icons.euro, _getBudgetLevel(best.averageCost)),
+                _buildTag(Icons.euro, best.budgetLevel),
                 const SizedBox(width: 10),
-                _buildTag(
-                  Icons.wb_sunny, 
-                  best.climate.length > 20 
-                      ? '${best.climate.substring(0, 17)}...' 
-                      : best.climate
-                ),
-                const SizedBox(width: 10),
-                _buildTag(Icons.star, best.rating.toString()),
+                _buildTag(Icons.wb_sunny, '${best.getAvgTemp(_userPreferences.travelMonth ?? DateTime.now().month)?.toStringAsFixed(1) ?? "--"}°C'),
+                const SizedBox(height: 10),
+                _buildTag(Icons.landscape, '${best.scoreNature}/5'),
               ],
             ),
             const SizedBox(height: 20),
@@ -471,8 +515,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   }
 
   void _startGame() {
-    if (_allDestinations.isEmpty) return;
+    if (_gameDestinations.isEmpty) {
+      print('⚠️ Aucune destination disponible pour le jeu');
+      return;
+    }
 
+    print('🎮 Démarrage du mini-jeu avec ${_gameDestinations.length} destinations');
+    
     setState(() {
       _gameStarted = true;
       _currentRound = 1;
@@ -480,7 +529,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
       _currentChoice = _getRandomUnseenDestination();
       if (_currentChoice != null) {
         _gameSeenIds.add(_currentChoice!.id);
-        _cardShownTime = DateTime.now(); // Start timer
+        print('   🎯 Round 1: ${_currentChoice!.city} (${_currentChoice!.region})');
       }
     });
   }
@@ -511,8 +560,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     await _favoritesService.removeFavorite(dest.id);
                   } else {
                     await _favoritesService.addFavorite(dest.id);
-                    // Log interaction for favorite
-                    _logInteraction(InteractionType.addToFavorites);
                   }
                   _loadFavorites();
                 },
@@ -522,29 +569,81 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 
           const SizedBox(height: 10),
 
-          // Destination affichée
+          // Destination affichée avec image
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  const Icon(Icons.location_city, size: 40, color: Colors.white70),
-                  const SizedBox(height: 10),
-                  Text(dest.name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  Text(dest.country, style: const TextStyle(color: Colors.white70, fontSize: 16)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Chip(label: Text(_getBudgetLevel(dest.averageCost)), backgroundColor: Colors.white10, labelStyle: const TextStyle(color: Colors.white)),
-                      Chip(label: Text(dest.climate), backgroundColor: Colors.white10, labelStyle: const TextStyle(color: Colors.white)),
-                    ],
-                  )
+                  // Image de la destination (toute la place)
+                  Image.asset(
+                    'assets/images/destinations/${dest.id}.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.white.withOpacity(0.1),
+                        child: const Center(
+                          child: Icon(Icons.location_city, size: 60, color: Colors.white70),
+                        ),
+                      );
+                    },
+                  ),
+                  // Gradient pour rendre le texte lisible
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            Colors.black.withOpacity(0.8),
+                            Colors.black.withOpacity(0.4),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            dest.city,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              shadows: [
+                                Shadow(
+                                  offset: Offset(0, 1),
+                                  blurRadius: 3,
+                                  color: Colors.black,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            dest.country,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              shadows: [
+                                Shadow(
+                                  offset: Offset(0, 1),
+                                  blurRadius: 3,
+                                  color: Colors.black,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -586,9 +685,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   Future<void> _onUserChoice(String action) async {
     if (_currentChoice == null) return;
 
-    // 1. Log Interaction & Update Profile
-    final type = action == 'like' ? InteractionType.like : InteractionType.dislike;
-    await _logInteraction(type);
+    // 1. Log Interaction
+    await _logInteraction(action);
 
     // Snack
     if (mounted) {
@@ -603,57 +701,66 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 
     // Avancer
     if (_currentRound >= 5) {
-      _finishGameAndRecompute();
+      await _finishGameAndRecompute();
     } else {
       setState(() {
         _currentRound++;
         _currentChoice = _getRandomUnseenDestination();
         if (_currentChoice != null) {
           _gameSeenIds.add(_currentChoice!.id);
-          _cardShownTime = DateTime.now(); // Reset timer
+          print('   🎯 Round $_currentRound: ${_currentChoice!.city} (${_currentChoice!.region})');
         }
       });
     }
   }
 
-  Future<void> _logInteraction(InteractionType type) async {
+  Future<void> _logInteraction(String action) async {
     if (_currentChoice == null) return;
 
-    final duration = _cardShownTime != null 
-        ? DateTime.now().difference(_cardShownTime!).inMilliseconds 
-        : 1000;
+    // 📝 Enregistrer l'interaction pour l'effet de mode court terme
+    _recoService.recordInteraction(_currentChoice!, action);
 
-    final interaction = UserInteraction(
-      destinationId: _currentChoice!.id,
-      type: type,
-      timestamp: DateTime.now(),
-      durationMs: duration,
-    );
-
-    // 1. Sauvegarde en BDD via le service enrichi (qui gère aussi l'historique pour l'algo)
-    await _enhancedService.recordInteraction(_currentChoice!.id, type);
-
-    // 2. Mise à jour du profil utilisateur en mémoire (Apprentissage local pour affichage ou autre)
-    setState(() {
-      _currentUserProfile = UserInteractionService.updateUserProfile(
-        _currentUserProfile,
-        _currentChoice!,
-        interaction,
-      );
-    });
+    // Track liked/disliked destinations for learning
+    if (action == 'like') {
+      _likedDestinations.add(_currentChoice!);
+    } else if (action == 'dislike') {
+      _dislikedDestinations.add(_currentChoice!);
+    }
   }
 
-  Destination? _getRandomUnseenDestination() {
-    final candidates = _allDestinations.where((d) => !_gameSeenIds.contains(d.id)).toList();
+  DestinationV2? _getRandomUnseenDestination() {
+    if (_gameDestinations.isEmpty) return null;
+    final candidates = _gameDestinations
+      .where((d) => !_gameSeenIds.contains(d.id))
+      .toList();
     if (candidates.isEmpty) return null;
     candidates.shuffle(Random());
     return candidates.first;
   }
 
   Future<void> _finishGameAndRecompute() async {
+    // Use UserLearningService to update preferences
+    if (_likedDestinations.isNotEmpty || _dislikedDestinations.isNotEmpty) {
+      final updatedPrefs = await _learningService.updatePreferencesFromInteractions(
+        currentPrefs: _userPreferences,
+        likedDestinations: _likedDestinations,
+        dislikedDestinations: _dislikedDestinations,
+      );
+      
+      // Update state
+      setState(() {
+        _userPreferences = updatedPrefs;
+      });
+    }
+    
+    // Clear lists
+    _likedDestinations.clear();
+    _dislikedDestinations.clear();
+    
     // Recalculer la recommandation principale en tenant compte du profil mis à jour
     // On recharge via le service enrichi qui a pris en compte les interactions
     await _loadRecommendations();
+    await _loadGameDestinations(); // Recharger aussi les destinations du jeu
 
     setState(() {
       _gameStarted = false;
@@ -696,8 +803,17 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               physics: const BouncingScrollPhysics(),
               itemCount: list.length,
               itemBuilder: (context, index) {
-                final dest = list[index];
-                return _buildCarouselCard(dest, index + 2); // +2 car rank 1 est en haut
+                // Trouver le RecommendationResult correspondant
+                final result = _results.firstWhere(
+                  (r) => r.destination.id == list[index].id,
+                  orElse: () => RecommendationResult(
+                    destination: list[index],
+                    totalScore: 0,
+                    scoreBreakdown: {},
+                    topActivities: [],
+                  ),
+                );
+                return _buildCarouselCard(result, index + 2); // +2 car rank 1 est en haut
               },
             ),
           ),
@@ -706,7 +822,11 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
-  Widget _buildCarouselCard(Destination dest, int rank) {
+  Widget _buildCarouselCard(RecommendationResult result, int rank) {
+    final dest = result.destination;
+    final cosineSimilarity = result.totalScore; // 0-100
+    final stars = (cosineSimilarity / 100 * 5).clamp(0.0, 5.0); // Convertir en 0-5 étoiles
+    
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -724,52 +844,93 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white10,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-                child: Center(
-                  child: Icon(Icons.landscape, size: 40, color: Colors.white30),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    dest.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    child: Image.asset(
+                      'assets/images/destinations/${dest.id}.jpg',
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white10,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          ),
+                          child: Center(
+                            child: Icon(Icons.landscape, size: 40, color: Colors.white30),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    dest.country,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.star, size: 14, color: Colors.amber),
-                      const SizedBox(width: 4),
-                      Text(dest.rating.toString(), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      Text(
+                        dest.city,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        dest.country,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.star, size: 14, color: Colors.amber),
+                          const SizedBox(width: 4),
+                          Text(
+                            stars.toStringAsFixed(1),
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
             ),
           ],
         ),
+        // Badge sérendipité en haut à droite
+        if (result.isSerendipity)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade600,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.purple.shade900.withOpacity(0.5),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.explore,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+          ),
+        ],
       ),
-    );
+    ));
   }
 }

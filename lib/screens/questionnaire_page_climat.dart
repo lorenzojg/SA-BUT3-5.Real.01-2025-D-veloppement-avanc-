@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
+import '../services/database_service_v2.dart';
 
 class ClimatPage extends StatefulWidget {
   final VoidCallback onNext;
@@ -16,11 +17,34 @@ class ClimatPage extends StatefulWidget {
 }
 
 class _ClimatPageState extends State<ClimatPage> {
+  final DatabaseServiceV2 _db = DatabaseServiceV2();
+  
   // Slider value from 0 to 100
   double _temperatureLevel = 50.0;
+  
+  // Température min et max depuis la DB
+  double _minTemp = -10.0;
+  double _maxTemp = 40.0;
+  bool _loadingRange = true;
 
-  // Convert slider (0-100) to Celsius (-10 to 40)
-  double get _celsiusValue => (_temperatureLevel * 0.5) - 10;
+  @override
+  void initState() {
+    super.initState();
+    _loadTemperatureRange();
+  }
+
+  Future<void> _loadTemperatureRange() async {
+    final range = await _db.getTemperatureRange();
+    setState(() {
+      _minTemp = range['min']!;
+      _maxTemp = range['max']!;
+      _loadingRange = false;
+    });
+    print('🌡️ Plage de température: ${_minTemp}°C à ${_maxTemp}°C');
+  }
+
+  // Convert slider (0-100) to Celsius (minTemp to maxTemp)
+  double get _celsiusValue => (_temperatureLevel / 100) * (_maxTemp - _minTemp) + _minTemp;
 
   String get _temperatureDescription {
     if (_temperatureLevel < 20) return 'Très froid';
@@ -57,38 +81,63 @@ class _ClimatPageState extends State<ClimatPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _buildQuestionTitle(),
-                const SizedBox(height: 60),
-                _buildThermometer(),
-                const SizedBox(height: 50),
-                _buildNextButton(),
-              ],
-            ),
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Adapter le layout pour mobile
+            final availableHeight = constraints.maxHeight;
+            final isSmallScreen = availableHeight < 700;
+            
+            return Padding(
+              padding: EdgeInsets.all(isSmallScreen ? 12.0 : 20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _buildQuestionTitle(isSmallScreen),
+                  SizedBox(height: isSmallScreen ? 10 : 20),
+                  Expanded(child: _buildThermometer(isSmallScreen)),
+                  SizedBox(height: isSmallScreen ? 10 : 20),
+                  _buildNextButton(),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildQuestionTitle() {
-    return const Text(
+  Widget _buildQuestionTitle(bool isSmallScreen) {
+    return Text(
       'Quelle température préférez-vous ?',
       textAlign: TextAlign.center,
       style: TextStyle(
         color: Colors.white,
-        fontSize: 28,
+        fontSize: isSmallScreen ? 22 : 28,
         fontWeight: FontWeight.bold,
       ),
     );
   }
 
-  Widget _buildThermometer() {
+  Widget _buildThermometer(bool isSmallScreen) {
+    if (_loadingRange) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    }
+    
+    // Calculer 5 températures équidistantes pour l'affichage
+    final tempRange = _maxTemp - _minTemp;
+    final step = tempRange / 4; // 5 points = 4 intervalles
+    final temp5 = _maxTemp;
+    final temp4 = _maxTemp - step;
+    final temp3 = _maxTemp - 2 * step;
+    final temp2 = _maxTemp - 3 * step;
+    final temp1 = _minTemp;
+    
+    // Espacement adaptatif
+    final spacing = isSmallScreen ? 40.0 : 70.0;
+    
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,23 +145,23 @@ class _ClimatPageState extends State<ClimatPage> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            _buildTemperatureLabel('40°', 'Tropical', Colors.red.shade300),
-            const SizedBox(height: 70),
-            _buildTemperatureLabel('28°', 'Chaud', Colors.deepOrange.shade300),
-            const SizedBox(height: 70),
-            _buildTemperatureLabel('15°', 'Tempéré', Colors.orange.shade300),
-            const SizedBox(height: 70),
-            _buildTemperatureLabel('3°', 'Frais', Colors.cyan.shade300),
-            const SizedBox(height: 70),
-            _buildTemperatureLabel('-10°', 'Froid', Colors.blue.shade300),
+            _buildTemperatureLabel('${temp5.round()}°', 'Tropical', Colors.red.shade300, isSmallScreen),
+            SizedBox(height: spacing),
+            _buildTemperatureLabel('${temp4.round()}°', 'Chaud', Colors.deepOrange.shade300, isSmallScreen),
+            SizedBox(height: spacing),
+            _buildTemperatureLabel('${temp3.round()}°', 'Tempéré', Colors.orange.shade300, isSmallScreen),
+            SizedBox(height: spacing),
+            _buildTemperatureLabel('${temp2.round()}°', 'Frais', Colors.cyan.shade300, isSmallScreen),
+            SizedBox(height: spacing),
+            _buildTemperatureLabel('${temp1.round()}°', 'Froid', Colors.blue.shade300, isSmallScreen),
           ],
         ),
         const SizedBox(width: 30),
         Column(
           children: [
             Container(
-              width: 60,
-              height: 60,
+              width: isSmallScreen ? 50 : 60,
+              height: isSmallScreen ? 50 : 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: _temperatureColor,
@@ -121,7 +170,7 @@ class _ClimatPageState extends State<ClimatPage> {
               child: Center(
                 child: Text(
                   _temperatureEmoji,
-                  style: const TextStyle(fontSize: 30),
+                  style: TextStyle(fontSize: isSmallScreen ? 24 : 30),
                 ),
               ),
             ),
@@ -131,7 +180,7 @@ class _ClimatPageState extends State<ClimatPage> {
               children: [
                 Container(
                   width: 40,
-                  height: 400,
+                  height: isSmallScreen ? 250 : 350,
                   decoration: BoxDecoration(
                     color: Colors.white12,
                     borderRadius: BorderRadius.circular(20),
@@ -140,7 +189,7 @@ class _ClimatPageState extends State<ClimatPage> {
                 ),
                 Container(
                   width: 34,
-                  height: 400 * (_temperatureLevel / 100),
+                  height: (isSmallScreen ? 250 : 350) * (_temperatureLevel / 100),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
@@ -158,7 +207,7 @@ class _ClimatPageState extends State<ClimatPage> {
                   ),
                 ),
                 Positioned(
-                  bottom: (400 * (_temperatureLevel / 100) - 15).clamp(0, 385), // Clamp to avoid overflow
+                  bottom: ((isSmallScreen ? 250 : 350) * (_temperatureLevel / 100) - 15).clamp(0, (isSmallScreen ? 235 : 335).toDouble()),
                   child: Container(
                     width: 50,
                     height: 30,
@@ -177,8 +226,8 @@ class _ClimatPageState extends State<ClimatPage> {
             ),
             const SizedBox(height: 10),
             Container(
-              width: 80,
-              height: 80,
+              width: isSmallScreen ? 60 : 80,
+              height: isSmallScreen ? 60 : 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: _temperatureColor,
@@ -187,9 +236,9 @@ class _ClimatPageState extends State<ClimatPage> {
               child: Center(
                 child: Text(
                   '${_celsiusValue.round()}°',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: isSmallScreen ? 16 : 20,
                       fontWeight: FontWeight.bold),
                 ),
               ),
@@ -215,16 +264,16 @@ class _ClimatPageState extends State<ClimatPage> {
     );
   }
 
-  Widget _buildTemperatureLabel(String degree, String label, Color color) {
+  Widget _buildTemperatureLabel(String degree, String label, Color color, bool isSmallScreen) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(degree,
             style: TextStyle(
-                color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+                color: color, fontSize: isSmallScreen ? 14 : 16, fontWeight: FontWeight.bold)),
         Text(label,
             style:
-                const TextStyle(color: Colors.white70, fontSize: 12)),
+                TextStyle(color: Colors.white70, fontSize: isSmallScreen ? 10 : 12)),
       ],
     );
   }

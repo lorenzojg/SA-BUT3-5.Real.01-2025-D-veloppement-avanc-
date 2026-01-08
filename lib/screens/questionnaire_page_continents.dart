@@ -107,40 +107,45 @@ class _ContinentSelectionPageState extends State<ContinentSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildQuestionTitle(),
-            const SizedBox(height: 30),
-            _buildWorldMap(),
-            const SizedBox(height: 30),
-            _buildContinentLegend(),
-            const SizedBox(height: 30),
-            _buildNextButton(),
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmallScreen = constraints.maxHeight < 700;
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: EdgeInsets.all(isSmallScreen ? 12.0 : 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildQuestionTitle(isSmallScreen),
+                  _buildWorldMap(isSmallScreen),
+                  _buildContinentLegend(isSmallScreen),
+                  _buildNextButton(),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildQuestionTitle() {
-    return const Text(
+  Widget _buildQuestionTitle(bool isSmallScreen) {
+    return Text(
       'Avez-vous un continent de\npréférence ?',
       textAlign: TextAlign.center,
       style: TextStyle(
         color: Colors.white,
-        fontSize: 28,
+        fontSize: isSmallScreen ? 20 : 28,
         fontWeight: FontWeight.bold,
       ),
     );
   }
 
-  Widget _buildWorldMap() {
+  Widget _buildWorldMap(bool isSmallScreen) {
     return Container(
-      height: 300,
+      height: isSmallScreen ? 200 : 300,
       decoration: BoxDecoration(
         color: const Color(0xFF1a3a52).withOpacity(0.3),
         borderRadius: BorderRadius.circular(15),
@@ -171,7 +176,7 @@ class _ContinentSelectionPageState extends State<ContinentSelectionPage> {
     );
   }
 
-  Widget _buildContinentLegend() {
+  Widget _buildContinentLegend(bool isSmallScreen) {
     return Wrap(
       spacing: 10,
       runSpacing: 10,

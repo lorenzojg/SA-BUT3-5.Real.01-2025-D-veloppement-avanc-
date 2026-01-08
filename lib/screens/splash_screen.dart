@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'questionnaire_page.dart';
-import '../services/data_loader_service.dart'; // ✅ Import du service de chargement
+import 'recommendations_page.dart';
+import '../services/database_service_v2.dart';
+import '../services/preferences_cache_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -11,6 +13,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   bool _isLoading = false;
+  final PreferencesCacheService _cacheService = PreferencesCacheService();
 
   @override
   void initState() {
@@ -23,10 +26,28 @@ class _SplashScreenState extends State<SplashScreen> {
       _isLoading = true;
     });
 
-    final dataLoader = DataLoaderService();
     try {
-      await dataLoader.loadInitialData(); // Chargement de la DB
-      print('✅ Initialisation terminée');
+      // Initialiser la base de données V2 (copie bd.db depuis assets)
+      final db = DatabaseServiceV2();
+      await db.database;
+      
+      final stats = await db.getStats();
+      print('✅ DB V2 initialisée: ${stats['destinations']} destinations, ${stats['activities']} activités');
+      
+      // Vérifier si des préférences existent dans le cache
+      final cachedPrefs = await _cacheService.loadPreferences();
+      if (cachedPrefs != null && mounted) {
+        // Préférences trouvées, naviguer directement vers les recommandations
+        print('🚀 Préférences trouvées, navigation directe vers recommandations');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RecommendationsPage(
+              userPreferences: cachedPrefs,
+            ),
+          ),
+        );
+      }
     } catch (e) {
       print('❌ Erreur d\'initialisation: $e');
     } finally {
@@ -77,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const Icon(Icons.flight, size: 60, color: Colors.white),
             const SizedBox(height: 30),
             const Text(
-              "L'art de découvrir\nsans chercher...",
+              "L'art de s'envoler\nvers l'inattendu...",
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
