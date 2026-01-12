@@ -1,4 +1,4 @@
-import 'user_vector.dart';
+import 'user_vector_model.dart';
 
 /// Modèle de préférences utilisateur basé sur le questionnaire
 /// Utilisé pour le cold start et l'apprentissage continu

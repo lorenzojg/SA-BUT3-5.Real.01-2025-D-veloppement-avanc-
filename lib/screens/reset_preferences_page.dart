@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_preferences_v2.dart';
 import '../services/preferences_cache_service.dart';
+import 'questionnaire_page.dart';
 
 class ResetPreferencesPage extends StatelessWidget {
   final UserPreferencesV2 userPreferences;
@@ -49,6 +50,15 @@ class ResetPreferencesPage extends StatelessWidget {
                 
                 Navigator.pop(dialogContext); // Fermer le dialogue
                 Navigator.popUntil(context, (route) => route.isFirst); // Retour au début
+                
+                // Rediriger vers le questionnaire
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const QuestionnairePage(),
+                  ),
+                );
+                
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Préférences réinitialisées. Recommencez le questionnaire !'),

@@ -16,14 +16,14 @@ class RecentInteraction {
   
   /// Calcule le poids de cette interaction basé sur son ancienneté
   /// Plus l'interaction est récente, plus le poids est élevé
-  /// Décroissance exponentielle sur 8 minutes
+  /// Décroissance exponentielle sur 2 minutes
   double getWeight() {
     final now = DateTime.now();
     final ageInMinutes = now.difference(timestamp).inMinutes;
     
-    // Décroissance exponentielle: poids max=1.0, half-life=4h
+    // Décroissance exponentielle: poids max=1.0, half-life=2minutes
     // Formule: w(t) = 2^(-t/halfLife)
-    const halfLifeMin = 4.0;
+    const halfLifeMin = 1.0;
     final weight = pow(2, -ageInMinutes / halfLifeMin);
     
     return weight.toDouble().clamp(0.1, 1.0); // Min 10%, max 100%
@@ -122,19 +122,11 @@ class RecentBiasService {
     return UserVector.fromArray(weightedSum);
   }
 
-  /// Convertit une destination en vecteur user (approximation)
+  /// Convertit une destination en vecteur (approximation)
   UserVector _destinationToUserVector(DestinationV2 dest) {
-    // Température moyenne annuelle
-    double avgTemp = 0.0;
-    int count = 0;
-    for (int m = 1; m <= 12; m++) {
-      final temp = dest.getAvgTemp(m);
-      if (temp != null) {
-        avgTemp += temp;
-        count++;
-      }
-    }
-    if (count > 0) avgTemp /= count;
+    // Température du mois actuel
+    final currentMonth = DateTime.now().month;
+    final currentTemp = dest.getAvgTemp(currentMonth) ?? 20.0; // Valeur par défaut si pas de données
 
     // Continent vector
     final continentMapping = {
@@ -151,7 +143,7 @@ class RecentBiasService {
                             List<double>.filled(6, 0.0);
 
     return UserVector(
-      temperature: UserVector.normalizeTemperature(avgTemp),
+      temperature: UserVector.normalizeTemperature(currentTemp),
       budget: UserVector.normalizeBudget(dest.getBudgetLevelNumeric()),
       activity: dest.calculateActivityScore() / 100.0,
       urban: dest.calculateUrbanScore() / 100.0,

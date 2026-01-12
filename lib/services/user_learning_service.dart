@@ -238,7 +238,7 @@ class UserLearningService {
     
     continentCount.forEach((continent, count) {
       if (count >= threshold && !newContinents.contains(continent)) {
-        print('🌍 Ajout du continent "$continent" (${count}/${liked.length} likes)');
+        print('🌍 Ajout du continent "$continent" ($count/${liked.length} likes)');
         newContinents.add(continent);
       }
     });

@@ -95,7 +95,14 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            const Icon(Icons.flight, size: 60, color: Colors.white),
+            Image.asset(
+              'assets/images/icon/icon.png',
+              width: 120,
+              height: 120,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.flight, size: 60, color: Colors.white);
+              },
+            ),
             const SizedBox(height: 30),
             const Text(
               "L'art de s'envoler\nvers l'inattendu...",
@@ -182,20 +189,6 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildLogo() {
-    return const Positioned(
-      bottom: 40,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: Text(
-          'Serendia',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
+    return const SizedBox.shrink(); // Logo retiré car inclus dans l'icône principale
   }
 }

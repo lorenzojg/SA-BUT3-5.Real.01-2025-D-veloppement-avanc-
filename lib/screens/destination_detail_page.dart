@@ -1,14 +1,14 @@
 
 import 'package:flutter/material.dart';
-import '../models/destination_v2.dart';
-import '../models/activity_v2.dart';
+import '../models/destination_model.dart';
+import '../services/activity_v2.dart';
 import '../services/favorites_service.dart';
 import '../services/database_service_v2.dart';
 import 'package:countries_world_map/countries_world_map.dart';
 import 'package:countries_world_map/data/maps/world_map.dart';
 
 class DestinationDetailPage extends StatefulWidget {
-  final DestinationV2 destination;
+  final Destination destination;
   final int? rank;
 
   const DestinationDetailPage({

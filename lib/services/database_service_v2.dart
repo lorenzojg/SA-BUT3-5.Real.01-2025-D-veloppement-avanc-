@@ -59,14 +59,14 @@ class DatabaseServiceV2 {
   }
 
   /// Récupère toutes les destinations
-  Future<List<DestinationV2>> getAllDestinations() async {
+  Future<List<Destination>> getAllDestinations() async {
     final db = await database;
     
     try {
       final List<Map<String, dynamic>> maps = await db.query('destination');
       print('📊 ${maps.length} destinations trouvées en DB');
       
-      return maps.map((row) => DestinationV2.fromDb(row)).toList();
+      return maps.map((row) => Destination.fromMap(row)).toList();
     } catch (e) {
       print('❌ Erreur lecture destinations: $e');
       return [];
@@ -74,7 +74,7 @@ class DatabaseServiceV2 {
   }
 
   /// Récupère une destination par ID
-  Future<DestinationV2?> getDestinationById(String id) async {
+  Future<Destination?> getDestinationById(String id) async {
     final db = await database;
     
     try {
@@ -85,7 +85,7 @@ class DatabaseServiceV2 {
       );
       
       if (maps.isEmpty) return null;
-      return DestinationV2.fromDb(maps.first);
+      return Destination.fromMap(maps.first);
     } catch (e) {
       print('❌ Erreur lecture destination $id: $e');
       return null;
@@ -93,7 +93,7 @@ class DatabaseServiceV2 {
   }
 
   /// Récupère les destinations par continent/région
-  Future<List<DestinationV2>> getDestinationsByRegion(String region) async {
+  Future<List<Destination>> getDestinationsByRegion(String region) async {
     final db = await database;
     
     try {
@@ -103,7 +103,7 @@ class DatabaseServiceV2 {
         whereArgs: [region.toLowerCase()],
       );
       
-      return maps.map((row) => DestinationV2.fromDb(row)).toList();
+      return maps.map((row) => Destination.fromMap(row)).toList();
     } catch (e) {
       print('❌ Erreur lecture destinations région $region: $e');
       return [];
@@ -121,7 +121,7 @@ class DatabaseServiceV2 {
         whereArgs: [destinationId],
       );
       
-      return maps.map((row) => ActivityV2.fromDb(row)).toList();
+      return maps.map((row) => ActivityV2.fromMap(row)).toList();
     } catch (e) {
       print('❌ Erreur lecture activités pour $destinationId: $e');
       return [];
@@ -155,7 +155,7 @@ class DatabaseServiceV2 {
   }
 
   /// Recherche de destinations par texte (ville, pays, tags)
-  Future<List<DestinationV2>> searchDestinations(String query) async {
+  Future<List<Destination>> searchDestinations(String query) async {
     final db = await database;
     
     try {
@@ -165,7 +165,7 @@ class DatabaseServiceV2 {
         LIMIT 20
       ''', ['%$query%', '%$query%', '%$query%']);
       
-      return maps.map((row) => DestinationV2.fromDb(row)).toList();
+      return maps.map((row) => Destination.fromMap(row)).toList();
     } catch (e) {
       print('❌ Erreur recherche "$query": $e');
       return [];

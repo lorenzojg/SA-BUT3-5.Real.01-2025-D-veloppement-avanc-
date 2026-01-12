@@ -4,7 +4,7 @@ import '../models/activity_v2.dart';
 import '../models/user_preferences_v2.dart';
 import '../models/user_vector.dart';
 import '../models/destination_vector.dart';
-import 'database_service_v2.dart';
+import '../data/database_service_v2.dart';
 import 'vector_distance_service.dart';
 import 'vector_cache_service.dart';
 import 'recent_bias_service.dart';
@@ -340,7 +340,7 @@ class RecommendationServiceV2 {
     final topContinent = continents.entries.reduce((a, b) => a.value > b.value ? a : b).key;
 
     final budgets = results.map((r) => r.destination.budgetLevel).toList();
-    final avgBudget = budgets.length > 0 ? budgets.first : 'N/A';
+    final avgBudget = budgets.isNotEmpty ? budgets.first : 'N/A';
 
     return {
       'count': results.length,
@@ -677,7 +677,7 @@ class RecommendationServiceV2 {
           balanced.add(available[index]);
           iterators[i] = index + 1;
           addedAny = true;
-          print('   ✓ Ajout ${continent}: ${available[index].destination.city}');
+          print('   ✓ Ajout $continent: ${available[index].destination.city}');
         }
       }
       

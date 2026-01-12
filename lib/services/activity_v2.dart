@@ -29,7 +29,7 @@ class ActivityV2 {
   });
 
   /// Crée une activité depuis une ligne de la DB
-  factory ActivityV2.fromDb(Map<String, dynamic> row) {
+  factory ActivityV2.fromMap(Map<String, dynamic> row) {
     // Parse categories JSON
     List<String> cats = [];
     try {

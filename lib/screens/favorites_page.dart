@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/destination_v2.dart';
-import '../services/database_service_v2.dart';
+import '../data/database_service_v2.dart';
 import '../services/favorites_service.dart';
 import 'destination_detail_page.dart';
 
