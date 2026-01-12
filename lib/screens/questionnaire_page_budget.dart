@@ -46,31 +46,33 @@ class _BudgetSelectionPageState extends State<BudgetSelectionPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
       body: SafeArea(
-        child: Padding(
-
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildQuestionTitle(),
-              const SizedBox(height: 50),
-              _buildBudgetSlider(),
-              const SizedBox(height: 50),
-              _buildNextButton(),
-            ],
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isSmallScreen = constraints.maxHeight < 700;
+            return Padding(
+              padding: EdgeInsets.all(isSmallScreen ? 16.0 : 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildQuestionTitle(isSmallScreen),
+                  _buildBudgetSlider(),
+                  _buildNextButton(),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildQuestionTitle() {
-    return const Text(
+  Widget _buildQuestionTitle(bool isSmallScreen) {
+    return Text(
       'Quel est votre budget ?',
       textAlign: TextAlign.center,
       style: TextStyle(
         color: Colors.white,
-        fontSize: 28,
+        fontSize: isSmallScreen ? 22 : 28,
         fontWeight: FontWeight.bold,
       ),
     );

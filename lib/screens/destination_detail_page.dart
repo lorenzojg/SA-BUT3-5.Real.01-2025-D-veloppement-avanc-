@@ -1,7 +1,11 @@
 
 import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
+import '../services/activity_v2.dart';
 import '../services/favorites_service.dart';
+import '../services/database_service_v2.dart';
+import 'package:countries_world_map/countries_world_map.dart';
+import 'package:countries_world_map/data/maps/world_map.dart';
 
 class DestinationDetailPage extends StatefulWidget {
   final Destination destination;
@@ -19,13 +23,18 @@ class DestinationDetailPage extends StatefulWidget {
 
 class _DestinationDetailPageState extends State<DestinationDetailPage> {
   final FavoritesService _favoritesService = FavoritesService();
+  final DatabaseServiceV2 _db = DatabaseServiceV2();
+  
   bool _isFavorite = false;
   bool _isLoading = true;
+  List<ActivityV2> _topActivities = [];
+  List<ActivityV2> _allActivities = [];
 
   @override
   void initState() {
     super.initState();
     _loadFavoriteStatus();
+    _loadActivities();
   }
 
   Future<void> _loadFavoriteStatus() async {
@@ -33,6 +42,24 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
     setState(() {
       _isFavorite = _favoritesService.isFavorite(widget.destination.id);
       _isLoading = false;
+    });
+  }
+
+  Future<void> _loadActivities() async {
+    final activities = await _db.getActivitiesForDestination(widget.destination.id);
+    
+    // Sélectionner les 3 meilleures activités (par prix puis nom)
+    final sorted = List<ActivityV2>.from(activities);
+    sorted.sort((a, b) {
+      // Priorité: prix bas puis nom
+      final priceCompare = a.getPriceLevel().compareTo(b.getPriceLevel());
+      if (priceCompare != 0) return priceCompare;
+      return a.name.compareTo(b.name);
+    });
+    
+    setState(() {
+      _allActivities = activities;
+      _topActivities = sorted.take(3).toList();
     });
   }
 
@@ -61,6 +88,133 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
         ),
       );
     }
+  }
+
+  /// Récupère le prix du vol pour le mois en cours
+  String _getFlightPriceForCurrentMonth() {
+    final currentMonth = DateTime.now().month; // 1-12
+    final price = widget.destination.getFlightPrice(currentMonth);
+    
+    if (price == null || price == 0) {
+      return 'Prix non disponible';
+    }
+    
+    return '${price.toInt()}€';
+  }
+
+  /// Récupère la température pour le mois en cours
+  String _getCurrentMonthTemperature() {
+    final currentMonth = DateTime.now().month; // 1-12
+    final temp = widget.destination.getAvgTemp(currentMonth);
+    
+    if (temp == null) {
+      return 'Température non disponible';
+    }
+    
+    return '${temp.toInt()}°C';
+  }
+
+  /// Affiche un dialog avec les détails climatiques
+  void _showClimateDetails() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1a3a52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.wb_sunny, color: Colors.amber, size: 30),
+              const SizedBox(width: 10),
+              const Text(
+                'Climat détaillé',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.destination.climatDetails.isNotEmpty) ...[
+                  Text(
+                    widget.destination.climatDetails,
+                    style: const TextStyle(color: Colors.white70, fontSize: 15),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (widget.destination.periodeRecommendee.isNotEmpty) ...[
+                  const Text(
+                    'Période recommandée',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.destination.periodeRecommendee,
+                    style: const TextStyle(color: Colors.white70, fontSize: 15),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                // Températures mensuelles
+                const Text(
+                  'Températures moyennes par mois',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...List.generate(12, (index) {
+                  final month = index + 1;
+                  final monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 
+                                     'Jui', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                  final temp = widget.destination.getAvgTemp(month);
+                  
+                  if (temp == null) return const SizedBox.shrink();
+                  
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          monthNames[index],
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        Text(
+                          '${temp.toInt()}°C',
+                          style: TextStyle(
+                            color: temp > 25 ? Colors.orange : temp > 15 ? Colors.yellow : Colors.cyan,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Fermer',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -108,20 +262,27 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Image de fond avec dégradé selon le continent
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: _getGradientColors(widget.destination.continent),
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Icon(
-                      _getContinentIcon(widget.destination.continent),
-                      size: 150,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
+                  // Image de la destination
+                  Image.asset(
+                    'assets/images/destinations/${widget.destination.id}.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      // Fallback: dégradé selon le continent avec icône
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: _getGradientColors(widget.destination.region),
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Icon(
+                          _getContinentIcon(widget.destination.region),
+                          size: 150,
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                      );
+                    },
                   ),
                   // Gradient overlay pour le texte
                   Container(
@@ -189,7 +350,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                           const SizedBox(height: 12),
                           // Nom de la destination
                           Text(
-                            widget.destination.name,
+                            widget.destination.city,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 36,
@@ -222,7 +383,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '${widget.destination.country} • ${widget.destination.continent}',
+                                  '${widget.destination.country} • ${widget.destination.region}',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -262,7 +423,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
 
                   // ===== DESCRIPTION =====
                   _buildSection(
-                    title: 'À propos de ${widget.destination.name}',
+                    title: 'À propos de ${widget.destination.city}',
                     icon: Icons.info_outline,
                     iconColor: Colors.blue.shade300,
                     child: Text(
@@ -288,36 +449,75 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                         _buildInfoRow(
                           Icons.attach_money,
                           'Budget quotidien moyen',
-                          '${widget.destination.averageCost.toInt()}\$ par jour',
-                          _getBudgetLevel(widget.destination.averageCost),
+                          '${widget.destination.hebergementMoyenEurNuit.toInt()}€ par nuit',
+                          widget.destination.budgetLevel,
                           Colors.green,
                         ),
                         const SizedBox(height: 15),
                         _buildInfoRow(
-                          Icons.directions_run,
-                          'Niveau d\'activité',
-                          '${widget.destination.activityScore}/10',
-                          _getActivityLevel(widget.destination.activityScore),
-                          Colors.orange,
+                          Icons.flight_takeoff,
+                          'Prix du vol (ce mois)',
+                          _getFlightPriceForCurrentMonth(),
+                          'Estimation moyenne',
+                          Colors.blue,
                         ),
                         const SizedBox(height: 15),
                         _buildInfoRow(
-                          Icons.star,
-                          'Note des voyageurs',
-                          '${widget.destination.rating.toStringAsFixed(1)}/5',
-                          _getRatingText(widget.destination.rating),
-                          Colors.amber,
+                          Icons.thermostat,
+                          'Température actuelle',
+                          _getCurrentMonthTemperature(),
+                          'Mois en cours',
+                          Colors.orange,
                         ),
-                        if (widget.destination.unescoSite) ...[
-                          const SizedBox(height: 15),
-                          _buildInfoRow(
-                            Icons.verified,
-                            'Patrimoine UNESCO',
-                            'Site classé au patrimoine mondial',
-                            'Reconnaissance internationale',
-                            Colors.amber.shade700,
+                        const SizedBox(height: 15),
+                        GestureDetector(
+                          onTap: _showClimateDetails,
+                          child: Container(
+                            padding: const EdgeInsets.all(15),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white12),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.cyan.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(Icons.wb_sunny, color: Colors.cyan.shade300, size: 22),
+                                ),
+                                const SizedBox(width: 15),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Climat détaillé',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        'Voir plus de détails',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 16),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
@@ -333,6 +533,12 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                   _buildContinentCard(),
 
                   const SizedBox(height: 30),
+
+                  // ===== ACTIVITÉS RECOMMANDÉES =====
+                  if (_topActivities.isNotEmpty) ...[
+                    _buildActivitiesSection(),
+                    const SizedBox(height: 30),
+                  ],
 
                   // ===== BOUTON FAVORI PRINCIPAL =====
                   Center(
@@ -384,7 +590,10 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: _getGradientColors(widget.destination.continent),
+          colors: [
+            Colors.blue.shade900,
+            Colors.blue.shade700,
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
@@ -395,43 +604,101 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            _getContinentIcon(widget.destination.continent),
-            size: 60,
-            color: Colors.white.withOpacity(0.8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.location_on,
+                  color: Colors.red,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Localisation',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${widget.destination.city}, ${widget.destination.country}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 20),
+          // Carte du monde avec point rouge
+          Container(
+            height: 150,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Stack(
               children: [
-                const Text(
-                  'Continent',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
+                // Carte du monde en arrière-plan
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SimpleMap(
+                    instructions: SMapWorld.instructions,
+                    defaultColor: Colors.grey.shade300,
+                    colors: const {},
+                    callback: (id, name, tapdetails) {},
                   ),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  widget.destination.continent,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  _getContinentDescription(widget.destination.continent),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
+                // Point rouge pour la destination
+                Positioned(
+                  left: _longitudeToX(widget.destination.longitude),
+                  top: _latitudeToY(widget.destination.latitude),
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.5),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${widget.destination.region} • ${widget.destination.latitude.toStringAsFixed(2)}°, ${widget.destination.longitude.toStringAsFixed(2)}°',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 12,
             ),
           ),
         ],
@@ -439,8 +706,68 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
     );
   }
 
+  /// Convertit longitude (-180 à 180) en position X sur la carte (0 à largeur)
+  double _longitudeToX(double longitude) {
+    // Normaliser longitude: -180 → 0, 0 → 0.5, 180 → 1
+    final normalized = (longitude + 180) / 360;
+    // Obtenir la largeur du conteneur (approximativement, on utilise la largeur de l'écran moins padding)
+    return normalized * (MediaQuery.of(context).size.width - 80) - 8; // -8 pour centrer le point
+  }
+
+  /// Convertit latitude (-90 à 90) en position Y sur la carte (0 à hauteur)
+  double _latitudeToY(double latitude) {
+    // Normaliser latitude: 90 → 0 (haut), 0 → 0.5, -90 → 1 (bas)
+    // Projection de Mercator simplifiée
+    final normalized = (90 - latitude) / 180;
+    return normalized * 150 - 8; // 150 = hauteur de la carte, -8 pour centrer le point
+  }
+
   // ===== CARTE HIGHLIGHT "POURQUOI VISITER" =====
   Widget _buildHighlightCard() {
+    // Construire des arguments pertinents basés sur les données réelles
+    final arguments = <String>[];
+    
+    // 1. Climat et période
+    if (widget.destination.periodeRecommendee.isNotEmpty) {
+      arguments.add('Meilleure période : ${widget.destination.periodeRecommendee}');
+    }
+    
+    // 2. Température actuelle
+    final currentMonth = DateTime.now().month;
+    final currentTemp = widget.destination.getAvgTemp(currentMonth);
+    if (currentTemp != null) {
+      final tempEmoji = currentTemp > 25 ? '🔥' : currentTemp > 15 ? '☀️' : '🌤️';
+      arguments.add('$tempEmoji Température actuelle : ${currentTemp.toInt()}°C');
+    }
+    
+    // 3. Budget
+    final budgetEmoji = widget.destination.budgetLevel == 'Budget' ? '💰' : 
+                        widget.destination.budgetLevel == 'Moyen' ? '💵' : '💎';
+    arguments.add('$budgetEmoji Budget ${widget.destination.budgetLevel} (${widget.destination.hebergementMoyenEurNuit.toInt()}€/nuit)');
+    
+    // 4. Type de destination basé sur les scores
+    if (widget.destination.scoreNature >= 4) {
+      arguments.add('🌿 Destination nature exceptionnelle');
+    } else if (widget.destination.scoreCulture >= 4) {
+      arguments.add('🏛️ Riche patrimoine culturel');
+    } else if (widget.destination.scoreAdventure >= 4) {
+      arguments.add('🏔️ Parfait pour l\'aventure');
+    }
+    
+    // 5. Tags principaux
+    if (widget.destination.tags.isNotEmpty) {
+      final mainTag = widget.destination.tags.first.trim();
+      if (mainTag.isNotEmpty) {
+        arguments.add('✨ ${mainTag.substring(0, 1).toUpperCase()}${mainTag.substring(1)}');
+      }
+    }
+    
+    // 6. Informations pratiques
+    if (widget.destination.climatDetails.isNotEmpty && 
+        widget.destination.climatDetails.length < 100) {
+      arguments.add('🌍 ${widget.destination.climatDetails}');
+    }
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -490,22 +817,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
             ],
           ),
           const SizedBox(height: 15),
-          _buildHighlightPoint(
-            'Destination ${widget.destination.rating >= 4.0 ? "très populaire" : "appréciée"} des voyageurs (${widget.destination.rating.toStringAsFixed(1)}/5)',
-          ),
-          _buildHighlightPoint(
-            'Budget ${_getBudgetLevel(widget.destination.averageCost)} (${widget.destination.averageCost.toInt()}\$/jour)',
-          ),
-          _buildHighlightPoint(
-            'Niveau d\'activité ${widget.destination.activityScore}/10 - ${_getActivityLevel(widget.destination.activityScore)}',
-          ),
-          if (widget.destination.unescoSite)
-            _buildHighlightPoint(
-              'Site classé au patrimoine mondial de l\'UNESCO',
-            ),
-          _buildHighlightPoint(
-            'Idéal pour découvrir ${widget.destination.continent}',
-          ),
+          ...arguments.take(4).map((arg) => _buildHighlightPoint(arg)),
         ],
       ),
     );
@@ -544,9 +856,9 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
       children: [
         Expanded(
           child: _buildStatCard(
-            Icons.star,
-            widget.destination.rating.toStringAsFixed(1),
-            'Note',
+            Icons.landscape,
+            widget.destination.scoreNature.toStringAsFixed(1),
+            'Nature',
             Colors.amber,
           ),
         ),
@@ -554,8 +866,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
         Expanded(
           child: _buildStatCard(
             Icons.attach_money,
-            '${widget.destination.averageCost.toInt()}\$',
-            'Par jour',
+            '${widget.destination.hebergementMoyenEurNuit.toInt()}€',
+            'Par nuit',
             Colors.green,
           ),
         ),
@@ -563,8 +875,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
         Expanded(
           child: _buildStatCard(
             Icons.directions_run,
-            '${widget.destination.activityScore}',
-            'Activité',
+            '${widget.destination.scoreAdventure}',
+            'Aventure',
             Colors.orange,
           ),
         ),
@@ -775,28 +1087,212 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
     }
   }
 
-  // Niveau de budget
-  String _getBudgetLevel(double cost) {
-    if (cost < 50) return 'économique';
-    if (cost < 100) return 'modéré';
-    if (cost < 200) return 'confortable';
-    return 'élevé';
+  // ===== SECTION ACTIVITÉS =====
+  Widget _buildActivitiesSection() {
+    return _buildSection(
+      title: 'Activités recommandées',
+      icon: Icons.local_activity,
+      iconColor: Colors.purple.shade300,
+      child: Column(
+        children: [
+          // Top 3 activités
+          ..._topActivities.map((activity) => _buildActivityCard(activity)),
+          
+          if (_allActivities.length > 3) ...[
+            const SizedBox(height: 16),
+            // Bouton "Voir tout"
+            OutlinedButton.icon(
+              onPressed: () => _showAllActivities(),
+              icon: const Icon(Icons.grid_view),
+              label: Text('Voir toutes les activités (${_allActivities.length})'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
-  // Niveau d'activité
-  String _getActivityLevel(int score) {
-    if (score <= 3) return 'Détente et relaxation';
-    if (score <= 5) return 'Rythme modéré';
-    if (score <= 7) return 'Assez actif';
-    return 'Très actif';
+  Widget _buildActivityCard(ActivityV2 activity) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Icône d'activité
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.purple.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _getActivityIcon(activity.type),
+              color: Colors.purple.shade300,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Détails
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activity.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  activity.type.toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.purple.shade200,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Prix si disponible
+          if (activity.priceRange.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.euro, color: Colors.greenAccent, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    activity.priceRange,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
-  // Texte de la note
-  String _getRatingText(double rating) {
-    if (rating >= 4.5) return 'Excellent';
-    if (rating >= 4.0) return 'Très bien';
-    if (rating >= 3.5) return 'Bien';
-    if (rating >= 3.0) return 'Correct';
-    return 'À améliorer';
+  IconData _getActivityIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'cultural':
+      case 'culture':
+        return Icons.museum;
+      case 'adventure':
+      case 'aventure':
+        return Icons.hiking;
+      case 'nature':
+        return Icons.park;
+      case 'beach':
+      case 'plage':
+        return Icons.beach_access;
+      case 'food':
+      case 'gastronomie':
+        return Icons.restaurant;
+      case 'nightlife':
+        return Icons.nightlife;
+      case 'shopping':
+        return Icons.shopping_bag;
+      case 'wellness':
+        return Icons.spa;
+      default:
+        return Icons.local_activity;
+    }
+  }
+
+  void _showAllActivities() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1a3a52),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Titre
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.local_activity, color: Colors.white, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Toutes les activités (${_allActivities.length})',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white24),
+            // Liste
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.all(20),
+                itemCount: _allActivities.length,
+                itemBuilder: (context, index) {
+                  return _buildActivityCard(_allActivities[index]);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

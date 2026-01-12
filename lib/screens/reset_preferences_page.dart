@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import '../models/questionnaire_model.dart';
+import '../models/user_preferences_v2.dart';
+import '../services/preferences_cache_service.dart';
+import 'questionnaire_page.dart';
 
 class ResetPreferencesPage extends StatelessWidget {
-  final UserPreferences userPreferences;
+  final UserPreferencesV2 userPreferences;
 
   const ResetPreferencesPage({
     super.key,
     required this.userPreferences,
   });
 
-  void _showResetConfirmation(BuildContext context) {
+  void _showResetConfirmation(BuildContext context) async {
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -41,9 +43,22 @@ class ResetPreferencesPage extends StatelessWidget {
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+                // Effacer les préférences du cache
+                final cacheService = PreferencesCacheService();
+                await cacheService.clearPreferences();
+                
                 Navigator.pop(dialogContext); // Fermer le dialogue
                 Navigator.popUntil(context, (route) => route.isFirst); // Retour au début
+                
+                // Rediriger vers le questionnaire
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const QuestionnairePage(),
+                  ),
+                );
+                
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Préférences réinitialisées. Recommencez le questionnaire !'),
@@ -137,7 +152,7 @@ class ResetPreferencesPage extends StatelessWidget {
             _buildPreferenceCard(
               icon: Icons.public,
               title: 'Continents sélectionnés',
-              value: userPreferences.selectedContinents.join(', ') ?? 'Aucun',
+              value: userPreferences.selectedContinents.join(', '),
               color: Colors.blue,
             ),
             const SizedBox(height: 40),

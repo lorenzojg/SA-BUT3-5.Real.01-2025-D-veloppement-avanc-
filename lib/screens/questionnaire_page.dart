@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
+import '../models/user_preferences_model.dart';
+import '../services/vector_cache_service.dart';
+import '../services/preferences_cache_service.dart';
 // Importez vos pages personnalisées
 import 'questionnaire_page_continents.dart';
 import 'questionnaire_page_detente_sportif.dart';
@@ -19,6 +22,8 @@ class QuestionnairePage extends StatefulWidget {
 class _QuestionnairePageState extends State<QuestionnairePage> {
   final PageController _pageController = PageController();
   final UserPreferences userPreferences = UserPreferences();
+  final VectorCacheService _cacheService = VectorCacheService();
+  final PreferencesCacheService _prefsCacheService = PreferencesCacheService();
   int _currentPage = 0;
   
   // Liste des étapes (pages) du questionnaire
@@ -27,6 +32,11 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
   @override
   void initState() {
     super.initState();
+    
+    // 🚀 Lancer le précalcul des vecteurs en arrière-plan
+    print('🚀 Lancement précalcul embeddings pendant le questionnaire...');
+    _cacheService.precomputeInBackground();
+    
     // Le callback _nextPage permet de passer à la page suivante
     // Le callback _finishQuestionnaire est passé à la dernière étape
     _questionnairePages = [
@@ -82,17 +92,31 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
     }
   }
 
-  void _finishQuestionnaire() {
+  void _finishQuestionnaire() async {
     // Fonction appelée lorsque l'utilisateur a répondu à toutes les questions
     print('✅ Questionnaire Terminé. Préférences:');
     print(userPreferences.toString());
+    
+    // Convert old UserPreferences to UserPreferencesV2
+    final prefsV2 = UserPreferencesV2(
+      selectedContinents: userPreferences.selectedContinents,
+      minTemperature: userPreferences.prefJaugeClimat,
+      activityLevel: userPreferences.activityLevel ?? 50.0,
+      urbanLevel: userPreferences.prefJaugeVille * 100,
+      travelers: userPreferences.travelers ?? 'En solo',
+      budgetLevel: (userPreferences.budgetLevel ?? 2.0),
+      travelMonth: DateTime.now().month,
+    );
+    
+    // 💾 Sauvegarder dans le cache
+    await _prefsCacheService.savePreferences(prefsV2);
     
     // Naviguer vers la page de recommandations
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => RecommendationsPage(
-          userPreferences: userPreferences,
+          userPreferences: prefsV2,
         ),
       ),
     );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/destination_model.dart';
-import '../services/database_service.dart';
+import '../models/destination_v2.dart';
+import '../data/database_service_v2.dart';
 import '../services/favorites_service.dart';
 import 'destination_detail_page.dart';
 
@@ -12,10 +12,10 @@ class FavoritesPage extends StatefulWidget {
 }
 
 class _FavoritesPageState extends State<FavoritesPage> {
-  final DatabaseService _dbService = DatabaseService();
+  final DatabaseServiceV2 _dbService = DatabaseServiceV2();
   final FavoritesService _favoritesService = FavoritesService();
   
-  List<Destination> _favoriteDestinations = [];
+  List<DestinationV2> _favoriteDestinations = [];
   bool _isLoading = true;
 
   @override
@@ -250,7 +250,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     );
   }
 
-  Widget _buildFavoriteCard(Destination destination) {
+  Widget _buildFavoriteCard(DestinationV2 destination) {
     return Dismissible(
       key: Key(destination.id),
       direction: DismissDirection.endToStart,
@@ -288,7 +288,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                 style: TextStyle(color: Colors.white),
               ),
               content: Text(
-                'Voulez-vous retirer "${destination.name}" de vos favoris ?',
+                'Voulez-vous retirer "${destination.city}" de vos favoris ?',
                 style: const TextStyle(color: Colors.white70),
               ),
               actions: [
@@ -355,7 +355,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              destination.name,
+                              destination.city,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 24,
@@ -370,7 +370,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    '${destination.country} • ${destination.continent}',
+                                    '${destination.country} • ${destination.region}',
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 14,
@@ -402,7 +402,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        destination.rating.toStringAsFixed(1),
+                        destination.scoreAdventure.toStringAsFixed(1),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -420,7 +420,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          '${destination.averageCost.toInt()}\$/jour',
+                          '${destination.hebergementMoyenEurNuit.toInt()}€/nuit',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,

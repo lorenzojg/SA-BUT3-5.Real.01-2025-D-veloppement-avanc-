@@ -1,111 +1,168 @@
+import 'dart:convert';
+
+/// Modèle de destination basé sur les vraies données de la DB
+/// Colonnes DB: id, city, country, region, description, latitude, longitude, 
+/// avg_temp_monthly, ideal_durations, budget_level, culture, adventure, nature, 
+/// beaches, nightlife, cuisine, wellness, urban, seclusion, input_pays, 
+/// input_aeroport, climat_details, hebergement_moyen_eur_nuit, periode_recommandee, 
+/// prix_vol_par_mois, tags, prix-moyen-hotel-basse-saison, prix-moyen-hotel-haute-saison,
+/// date-basse-saison, date-haute-saison
 class Destination {
-  // Champs de la base de données
+  // === Identification ===
   final String id;
-  final String name;
+  final String city;
   final String country;
-  final String continent;
+  final String region; // 'europe', 'asia', 'africa', etc.
+  final String description;
   final double latitude;
   final double longitude;
-  final List<String> activities;
-  final double averageCost; // Coût moyen par jour (DB)
-  final String climate;
-  final int duration; // Durée idéale en jours
-  final String description;
-  final List<String> travelTypes;
-  final double rating;
-  final double annualVisitors;
-  final bool unescoSite;
 
-  // Champs de la logique de recommandation (Vectoriel)
-  final int activityScore; // 0.0 (détente) à 100.0 (sportif)
+  // === Climat ===
+  /// Températures moyennes par mois {1: {avg, max, min}, ..., 12: {...}}
+  final Map<int, Map<String, double>> avgTempMonthly;
+  final String climatDetails;
+  final String periodeRecommendee;
+
+  // === Budget et Prix ===
+  final String budgetLevel; // 'Budget', 'Mid-range', 'Luxury'
+  final double hebergementMoyenEurNuit;
+  final double? prixMoyenHotelBasseSaison;
+  final double? prixMoyenHotelHauteSaison;
+  final DateTime? dateBasseSaison;
+  final DateTime? dateHauteSaison;
   
-  // Scores vectoriels (0.0 à 1.0 ou 0 à 5)
-  final double scoreCulture;
-  final double scoreAdventure;
-  final double scoreNature;
-  final double scoreBeaches;
-  final double scoreNightlife;
-  final double scoreCuisine;
-  final double scoreWellness;
-  final double scoreUrban;
-  final double scoreSeclusion;
+  /// Prix des vols par mois [jan, feb, ..., dec]
+  final List<int>? prixVolParMois;
 
-  // ✅ NOUVEAU : Prix des vols par mois (Jan -> Dec)
-  final List<int>? monthlyFlightPrices;
+  // === Durée ===
+  final List<String> idealDurations; // ['Short trip', 'One week', ...]
+
+  // === Scores Vectoriels (0-5) ===
+  /// Ces scores sont directement dans la DB et représentent les caractéristiques de la destination
+  final int scoreCulture;
+  final int scoreAdventure;
+  final int scoreNature;
+  final int scoreBeaches;
+  final int scoreNightlife;
+  final int scoreCuisine;
+  final int scoreWellness;
+  final int scoreUrban;
+  final int scoreSeclusion;
+
+  // === Métadonnées ===
+  final String inputAeroport;
+  final List<String> tags; // Ex: ['Ski', 'Montagne', 'Nature']
 
   Destination({
     required this.id,
-    required this.name,
+    required this.city,
     required this.country,
-    required this.continent,
+    required this.region,
+    required this.description,
     required this.latitude,
     required this.longitude,
-    required this.activities,
-    required this.averageCost,
-    required this.climate,
-    required this.duration,
-    required this.description,
-    required this.travelTypes,
-    required this.rating,
-    required this.annualVisitors,
-    required this.unescoSite,
-    required this.activityScore,
-    this.scoreCulture = 0.0,
-    this.scoreAdventure = 0.0,
-    this.scoreNature = 0.0,
-    this.scoreBeaches = 0.0,
-    this.scoreNightlife = 0.0,
-    this.scoreCuisine = 0.0,
-    this.scoreWellness = 0.0,
-    this.scoreUrban = 0.0,
-    this.scoreSeclusion = 0.0,
-    this.monthlyFlightPrices,
+    required this.avgTempMonthly,
+    required this.climatDetails,
+    required this.periodeRecommendee,
+    required this.budgetLevel,
+    required this.hebergementMoyenEurNuit,
+    this.prixMoyenHotelBasseSaison,
+    this.prixMoyenHotelHauteSaison,
+    this.dateBasseSaison,
+    this.dateHauteSaison,
+    this.prixVolParMois,
+    required this.idealDurations,
+    required this.scoreCulture,
+    required this.scoreAdventure,
+    required this.scoreNature,
+    required this.scoreBeaches,
+    required this.scoreNightlife,
+    required this.scoreCuisine,
+    required this.scoreWellness,
+    required this.scoreUrban,
+    required this.scoreSeclusion,
+    required this.inputAeroport,
+    required this.tags,
   });
 
-  // Méthode fromJson pour le DataLoaderService
-  factory Destination.fromJson(Map<String, dynamic> json) {
-    final activitiesList = List<String>.from(json['activities'] as List);
-    
-    // Calcul basique des scores si non présents dans le JSON
-    // Ceci est une approximation pour faire fonctionner l'algo
-    double calcScore(List<String> keywords) {
-      int count = 0;
-      for (var act in activitiesList) {
-        for (var k in keywords) {
-          if (act.toLowerCase().contains(k.toLowerCase())) count++;
-        }
-      }
-      return count > 0 ? (count * 1.0).clamp(0.0, 5.0) : 0.0;
+  /// Crée une destination depuis une ligne de la DB
+  factory Destination.fromMap(Map<String, dynamic> map) {
+    // Parse avg_temp_monthly JSON
+    Map<int, Map<String, double>> tempMonthly = {};
+    try {
+      final tempJson = jsonDecode(map['avg_temp_monthly'] as String);
+      tempJson.forEach((monthStr, values) {
+        final month = int.parse(monthStr);
+        tempMonthly[month] = {
+          'avg': (values['avg'] as num).toDouble(),
+          'max': (values['max'] as num).toDouble(),
+          'min': (values['min'] as num).toDouble(),
+        };
+      });
+    } catch (e) {
+      print('⚠️ Erreur parsing avg_temp_monthly pour ${map['city']}: $e');
     }
 
+    // Parse prix_vol_par_mois JSON
+    List<int>? prixVol;
+    try {
+      final prixJson = jsonDecode(map['prix_vol_par_mois'] as String);
+      prixVol = (prixJson as List).map((e) => (e as int)).toList();
+    } catch (e) {
+      // Pas grave si pas de prix vol
+    }
+
+    // Parse ideal_durations JSON
+    List<String> durations = [];
+    try {
+      final durJson = jsonDecode(map['durees_ideales'] as String);
+      durations = (durJson as List).map((e) => e.toString()).toList();
+    } catch (e) {
+      durations = ['One week'];
+    }
+
+    // Parse tags JSON
+    List<String> tagsList = [];
+    try {
+      final tagsJson = jsonDecode(map['tags'] as String);
+      tagsList = (tagsJson as List).map((e) => e.toString()).toList();
+    } catch (e) {
+      // Pas grave si pas de tags
+    }
+
+
     return Destination(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      country: json['country'] as String,
-      continent: json['continent'] as String,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
-      activities: activitiesList,
-      averageCost: (json['averageCost'] as num).toDouble(),
-      climate: json['climate'] as String,
-      duration: (json['duration'] as num).toInt(),
-      description: json['description'] as String,
-      travelTypes: List<String>.from(json['travelTypes'] as List),
-      rating: (json['rating'] as num).toDouble(),
-      annualVisitors: (json['annualVisitors'] as num).toDouble(),
-      unescoSite: json['unescoSite'] as bool,
-      activityScore: (json['activityScore'] as num? ?? 50).toInt(),
-      
-      // Extraction ou calcul des scores
-      scoreCulture: (json['scoreCulture'] as num?)?.toDouble() ?? calcScore(['musée', 'histoire', 'culture', 'art', 'temple']),
-      scoreAdventure: (json['scoreAdventure'] as num?)?.toDouble() ?? calcScore(['aventure', 'randonnée', 'trek', 'sport', 'kayak']),
-      scoreNature: (json['scoreNature'] as num?)?.toDouble() ?? calcScore(['nature', 'parc', 'montagne', 'forêt', 'paysage']),
-      scoreBeaches: (json['scoreBeaches'] as num?)?.toDouble() ?? calcScore(['plage', 'mer', 'sable', 'baignade']),
-      scoreNightlife: (json['scoreNightlife'] as num?)?.toDouble() ?? calcScore(['nuit', 'bar', 'club', 'fête', 'soirée']),
-      scoreCuisine: (json['scoreCuisine'] as num?)?.toDouble() ?? calcScore(['cuisine', 'gastronomie', 'restaurant', 'manger']),
-      scoreWellness: (json['scoreWellness'] as num?)?.toDouble() ?? calcScore(['bien-être', 'spa', 'détente', 'yoga']),
-      scoreUrban: (json['scoreUrban'] as num?)?.toDouble() ?? calcScore(['ville', 'shopping', 'urbain', 'architecture']),
-      scoreSeclusion: (json['scoreSeclusion'] as num?)?.toDouble() ?? calcScore(['calme', 'isolé', 'tranquille', 'retraite']),
+      id: map['id'] as String,
+      city: map['ville'] as String,
+      country: map['pays'] as String,
+      region: map['region'] as String,
+      description: map['description'] as String,
+      latitude: (map['latitude'] as num).toDouble(),
+      longitude: (map['longitude'] as num).toDouble(),
+      avgTempMonthly: tempMonthly,
+      idealDurations: durations,
+      budgetLevel: map['budget'] as String,
+      scoreCulture: map['culture'] as int,
+      scoreAdventure: map['adventure'] as int,
+      scoreNature: map['nature'] as int,
+      scoreBeaches: map['beaches'] as int,
+      scoreNightlife: map['nightlife'] as int,
+      scoreCuisine: map['cuisine'] as int,
+      scoreWellness: map['wellness'] as int,
+      scoreUrban: map['urban'] as int,
+      scoreSeclusion: map['seclusion'] as int,
+      inputAeroport: map['input_aeroport'] as String? ?? '',
+      climatDetails: map['climat_details'] as String? ?? '',
+      hebergementMoyenEurNuit: (map['hebergement_moyen_eur_nuit'] as num).toDouble(),
+      periodeRecommendee: map['periode_recommandee'] as String? ?? '',
+      prixVolParMois: prixVol,
+      tags: tagsList,
+      prixMoyenHotelBasseSaison: (map['prix-moyen-hotel-basse-saison'] as num?)?.toDouble(),
+      prixMoyenHotelHauteSaison: (map['prix-moyen-hotel-haute-saison'] as num?)?.toDouble(),
+      dateBasseSaison: DateTime.parse(map['date-basse-saison'] as String),
+      dateHauteSaison: DateTime.parse(map['date-haute-saison'] as String),      
     );
   }
+
+  
 }
