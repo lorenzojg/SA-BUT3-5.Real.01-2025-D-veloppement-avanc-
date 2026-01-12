@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'questionnaire_page.dart';
 import 'recommendations_page.dart';
-import '../services/database_service_v2.dart';
 import '../services/preferences_cache_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -27,13 +26,6 @@ class _SplashScreenState extends State<SplashScreen> {
     });
 
     try {
-      // Initialiser la base de données V2 (copie bd.db depuis assets)
-      final db = DatabaseServiceV2();
-      await db.database;
-      
-      final stats = await db.getStats();
-      print('✅ DB V2 initialisée: ${stats['destinations']} destinations, ${stats['activities']} activités');
-      
       // Vérifier si des préférences existent dans le cache
       final cachedPrefs = await _cacheService.loadPreferences();
       if (cachedPrefs != null && mounted) {
@@ -49,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen> {
         );
       }
     } catch (e) {
-      print('❌ Erreur d\'initialisation: $e');
+      print('❌ Erreur de chargement des préférences: $e');
     } finally {
       setState(() {
         _isLoading = false;

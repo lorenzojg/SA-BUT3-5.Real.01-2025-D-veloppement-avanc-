@@ -101,22 +101,30 @@ class ActivityService {
 
   /// Récupère les activités pour une destination
   Future<List<Activity>> getActivitiesForDestination(String destinationId) async {
-    // Methode à écrir ici directement dans cette classe
-    final db = await AppDatabase().database;
+  final db = await AppDatabase().database;
+  
+  try {
+    print('🔍 Recherche activités pour destination: $destinationId');
     
-    try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'activity',
-        where: 'destination_id = ?',
-        whereArgs: [destinationId],
-      );
-      
-      return maps.map((row) => Activity.fromMap(row)).toList();
-    } catch (e) {
-      print('❌ Erreur lecture activités pour destination $destinationId: $e');
-      return [];
+    final List<Map<String, dynamic>> maps = await db.query(
+     'Activite',
+      where: 'id_destination = ?',
+      whereArgs: [destinationId],
+    );
+    
+    print('📊 ${maps.length} activités trouvées');
+    
+    if (maps.isNotEmpty) {
+      print('🔍 Première activité - Colonnes disponibles: ${maps.first.keys.toList()}');
+      print('🔍 Première activité - Données: ${maps.first}');
     }
+    
+    return maps.map((row) => Activity.fromMap(row)).toList();
+  } catch (e) {
+    print('❌ Erreur lecture activités pour destination $destinationId: $e');
+    return [];
   }
+}
 
   /// Compte le nombre d'activités
   Future<int> getActivitiesCount() async {
@@ -124,7 +132,7 @@ class ActivityService {
     final db = await AppDatabase().database;
     
     try {
-      final result = await db.rawQuery('SELECT COUNT(*) as count FROM activity');
+      final result = await db.rawQuery('SELECT COUNT(*) as count FROM Activite');
       final count = result.first['count'] as int?;
       return count ?? 0;
     } catch (e) {

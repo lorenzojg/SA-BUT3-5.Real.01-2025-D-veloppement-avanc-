@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/questionnaire_model.dart';
-import '../services/database_service_v2.dart';
+import '../services/destination_service.dart';
 
 class ClimatPage extends StatefulWidget {
   final VoidCallback onNext;
@@ -17,7 +17,7 @@ class ClimatPage extends StatefulWidget {
 }
 
 class _ClimatPageState extends State<ClimatPage> {
-  final DatabaseServiceV2 _db = DatabaseServiceV2();
+  final DestinationService _db = DestinationService();
   
   // Slider value from 0 to 100
   double _temperatureLevel = 50.0;
