@@ -78,7 +78,7 @@ class DestinationService {
     
     try {
       final List<Map<String, dynamic>> maps = await db.query(
-        'destination',
+        'Destination',
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -96,7 +96,7 @@ class DestinationService {
     final db = await AppDatabase().database;
     
     try {
-      final result = await db.rawQuery('SELECT COUNT(*) as count FROM destination');
+      final result = await db.rawQuery('SELECT COUNT(*) as count FROM Destination');
       final count = result.first['count'] as int?;
       return count ?? 0;
     } catch (e) {
@@ -111,8 +111,8 @@ class DestinationService {
     
     try {
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
-        SELECT * FROM destination 
-        WHERE city LIKE ? OR country LIKE ? OR tags LIKE ?
+        SELECT * FROM Destination 
+        WHERE ville LIKE ? OR pays LIKE ? OR tags LIKE ?
         LIMIT 20
       ''', ['%$query%', '%$query%', '%$query%']);
       
@@ -128,7 +128,7 @@ class DestinationService {
     final db = await AppDatabase().database;
     
     try {
-      final List<Map<String, dynamic>> maps = await db.query('destination');
+      final List<Map<String, dynamic>> maps = await db.query('Destination');
       print('📊 ${maps.length} destinations trouvées en DB');
       
       return maps.map((row) => Destination.fromMap(row)).toList();
@@ -146,7 +146,7 @@ class DestinationService {
     
     try {
       final List<Map<String, dynamic>> maps = await db.query(
-        'destination',
+        'Destination',
         where: 'region = ?',
         whereArgs: [region.toLowerCase()],
       );
@@ -156,5 +156,40 @@ class DestinationService {
       print('❌ Erreur lecture destinations région $region: $e');
       return [];
     }
+  }
+
+  /// Récupère les températures min et max parmi toutes les destinations
+  Future<Map<String, double>> getTemperatureRange() async {
+    final destinations = await getAllDestinations();
+    
+    if (destinations.isEmpty) {
+      return {'min': -10.0, 'max': 40.0}; // Valeurs par défaut
+    }
+    
+    double minTemp = double.infinity;
+    double maxTemp = double.negativeInfinity;
+    
+    for (final dest in destinations) {
+      if (dest.avgTempMonthly.isNotEmpty) {
+        // Parcourir les températures mensuelles (Map<int, Map<String, double>>)
+        for (final monthData in dest.avgTempMonthly.values) {
+          final avgTemp = monthData['avg'];
+          if (avgTemp != null) {
+            if (avgTemp < minTemp) minTemp = avgTemp;
+            if (avgTemp > maxTemp) maxTemp = avgTemp;
+          }
+        }
+      }
+    }
+    
+    // Si aucune température trouvée, utiliser valeurs par défaut
+    if (minTemp == double.infinity || maxTemp == double.negativeInfinity) {
+      return {'min': -10.0, 'max': 40.0};
+    }
+    
+    return {
+      'min': minTemp.floorToDouble(),
+      'max': maxTemp.ceilToDouble(),
+    };
   }
 }
