@@ -553,76 +553,36 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                     iconColor: Colors.orange.shade300,
                     child: Column(
                       children: [
-                        _buildInfoRow(
-                          Icons.attach_money,
-                          'Budget quotidien moyen',
-                          '${widget.destination.hebergementMoyenEurNuit.toInt()}€ par nuit',
-                          widget.destination.budgetLevel,
-                          Colors.green,
+                        GestureDetector(
+                          onTap: _showSeasonDetails,
+                          child: _buildInfoRow(
+                            Icons.attach_money,
+                            'Budget quotidien moyen',
+                            '${widget.destination.hebergementMoyenEurNuit.toInt()}€ par nuit',
+                            widget.destination.budgetLevel,
+                            Colors.green,
+                          ),
                         ),
                         const SizedBox(height: 15),
-                        _buildInfoRow(
-                          Icons.flight_takeoff,
-                          'Prix du vol (ce mois)',
-                          _getFlightPriceForCurrentMonth(),
-                          'Estimation moyenne',
-                          Colors.blue,
-                        ),
-                        const SizedBox(height: 15),
-                        _buildInfoRow(
-                          Icons.thermostat,
-                          'Température actuelle',
-                          _getCurrentMonthTemperature(),
-                          'Mois en cours',
-                          Colors.orange,
+                        GestureDetector(
+                          onTap: _showFlightPriceDetails,
+                          child: _buildInfoRow(
+                            Icons.flight_takeoff,
+                            'Prix du vol (ce mois)',
+                            _getFlightPriceForCurrentMonth(),
+                            'Estimation moyenne',
+                            Colors.blue,
+                          ),
                         ),
                         const SizedBox(height: 15),
                         GestureDetector(
                           onTap: _showClimateDetails,
-                          child: Container(
-                            padding: const EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white12),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.cyan.withOpacity(0.2),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(Icons.wb_sunny, color: Colors.cyan.shade300, size: 22),
-                                ),
-                                const SizedBox(width: 15),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Climat détaillé',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        'Voir plus de détails',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 16),
-                              ],
-                            ),
+                          child: _buildInfoRow(
+                            Icons.thermostat,
+                            'Température actuelle',
+                            _getCurrentMonthTemperature(),
+                            'Mois en cours',
+                            Colors.orange,
                           ),
                         ),
                       ],
@@ -1700,6 +1660,396 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showFlightPriceDetails() {
+    final prices = widget.destination.prixVolParMois;
+    if (prices == null || prices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Prix des vols non disponibles')),
+      );
+      return;
+    }
+
+    final months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jui', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    final currentMonth = DateTime.now().month;
+    final maxPrice = prices.reduce((a, b) => a > b ? a : b);
+    final minPrice = prices.reduce((a, b) => a < b ? a : b);
+    final avgPrice = prices.reduce((a, b) => a + b) ~/ prices.length;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1a3a52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.flight_takeoff, color: Colors.blue, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Prix des vols',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Statistiques
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildPriceStatCard('Min', '$minPrice€', Colors.green),
+                    _buildPriceStatCard('Moyen', '$avgPrice€', Colors.orange),
+                    _buildPriceStatCard('Max', '$maxPrice€', Colors.red),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Liste des prix par mois
+              const Text(
+                'Prix mensuels',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              Expanded(
+                child: ListView.builder(
+                  itemCount: prices.length,
+                  itemBuilder: (context, index) {
+                    final month = index + 1;
+                    final price = prices[index];
+                    final isCurrentMonth = month == currentMonth;
+                    final percentage = (price / maxPrice * 100).round();
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isCurrentMonth 
+                          ? Colors.blue.withOpacity(0.2) 
+                          : Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isCurrentMonth 
+                            ? Colors.blue.withOpacity(0.5) 
+                            : Colors.white.withOpacity(0.1),
+                          width: isCurrentMonth ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 40,
+                            child: Text(
+                              months[index],
+                              style: TextStyle(
+                                color: isCurrentMonth ? Colors.blue : Colors.white70,
+                                fontWeight: isCurrentMonth ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: LinearProgressIndicator(
+                                          value: percentage / 100,
+                                          minHeight: 8,
+                                          backgroundColor: Colors.white.withOpacity(0.1),
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            _getPriceColor(price, minPrice, maxPrice),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '$price€',
+                            style: TextStyle(
+                              color: isCurrentMonth ? Colors.blue : Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          if (isCurrentMonth)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Actuel',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriceStatCard(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getPriceColor(int price, int minPrice, int maxPrice) {
+    final range = maxPrice - minPrice;
+    final position = (price - minPrice) / range;
+    
+    if (position < 0.33) return Colors.green;
+    if (position < 0.66) return Colors.orange;
+    return Colors.red;
+  }
+
+  void _showSeasonDetails() {
+    final lowSeason = widget.destination.dateBasseSaison;
+    final highSeason = widget.destination.dateHauteSaison;
+    final pricePerNight = widget.destination.hebergementMoyenEurNuit.toInt();
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1a3a52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.hotel, color: Colors.green, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Hébergement',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Prix moyen
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.euro, color: Colors.green, size: 28),
+                    const SizedBox(width: 12),
+                    Text(
+                      '$pricePerNight€ / nuit',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Saisons
+              if (lowSeason != null) ...[
+                _buildSeasonCard(
+                  'Basse saison',
+                  lowSeason,
+                  Colors.blue,
+                  Icons.ac_unit,
+                  'Meilleurs prix',
+                ),
+                const SizedBox(height: 12),
+              ],
+              
+              if (highSeason != null) ...[
+                _buildSeasonCard(
+                  'Haute saison',
+                  highSeason,
+                  Colors.orange,
+                  Icons.wb_sunny,
+                  'Prix élevés',
+                ),
+              ],
+
+              if (lowSeason == null && highSeason == null) ...[
+                const Text(
+                  'Informations de saison non disponibles',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSeasonCard(String title, DateTime date, Color color, IconData icon, String note) {
+    final month = date.month;
+    final monthNames = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  monthNames[month],
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  note,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
