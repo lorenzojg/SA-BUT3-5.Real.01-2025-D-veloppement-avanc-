@@ -2,7 +2,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
 import '../models/user_preferences_model.dart';
-import '../services/recommendation_service_v2.dart';
+import '../services/recommendation_service.dart';
+import '../services/destination_service.dart';
 import '../services/user_learning_service.dart';
 import '../services/favorites_service.dart';
 import 'contact_page.dart';
@@ -398,7 +399,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               children: [
                 _buildTag(Icons.euro, best.budgetLevel),
                 const SizedBox(width: 10),
-                _buildTag(Icons.wb_sunny, '${best.getAvgTemp(_userPreferences.travelMonth ?? DateTime.now().month)?.toStringAsFixed(1) ?? "--"}°C'),
+                _buildTag(Icons.wb_sunny, '${DestinationService.getAvgTemp(best, _userPreferences.travelMonth ?? DateTime.now().month)?.toStringAsFixed(1) ?? "--"}°C'),
                 const SizedBox(height: 10),
                 _buildTag(Icons.landscape, '${best.scoreNature}/5'),
               ],

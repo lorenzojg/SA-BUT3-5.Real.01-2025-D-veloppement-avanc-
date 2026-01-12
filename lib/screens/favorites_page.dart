@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/destination_v2.dart';
-import '../data/database_service_v2.dart';
+import '../services/destination_service.dart';
+import '../models/destination_model.dart';
 import '../services/favorites_service.dart';
 import 'destination_detail_page.dart';
 
@@ -12,10 +12,10 @@ class FavoritesPage extends StatefulWidget {
 }
 
 class _FavoritesPageState extends State<FavoritesPage> {
-  final DatabaseServiceV2 _dbService = DatabaseServiceV2();
+  final DestinationService _destinationService= DestinationService();
   final FavoritesService _favoritesService = FavoritesService();
   
-  List<DestinationV2> _favoriteDestinations = [];
+  List<Destination> _favoriteDestinations = [];
   bool _isLoading = true;
 
   @override
@@ -44,7 +44,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
       }
 
       // Charger toutes les destinations
-      final allDestinations = await _dbService.getAllDestinations();
+      final allDestinations = await _destinationService.getAllDestinations();
       
       // Filtrer pour ne garder que les favoris
       final favorites = allDestinations
@@ -250,7 +250,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     );
   }
 
-  Widget _buildFavoriteCard(DestinationV2 destination) {
+  Widget _buildFavoriteCard(Destination destination) {
     return Dismissible(
       key: Key(destination.id),
       direction: DismissDirection.endToStart,

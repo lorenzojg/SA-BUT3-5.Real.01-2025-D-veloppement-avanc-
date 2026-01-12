@@ -1,7 +1,9 @@
+import '../data/app_database.dart';
+
 import '../models/destination_model.dart';
 
 /// Service pour gérer la logique métier liée aux destinations
-/// Sépare la logique métier du modèle de données
+/// Sépare du modèle de données
 class DestinationService {
   /// Obtient la température moyenne pour un mois donné (1-12)
   static double? getAvgTemp(Destination destination, int month) {
@@ -60,58 +62,23 @@ class DestinationService {
     return ((villeScore - natureScore + 5) / 10 * 100).clamp(0, 100);
   }
 
-  /// Vérifie si la destination correspond au continent
-  static bool matchesContinent(Destination destination, String continent) {
-    // Mapping région DB (anglais snake_case) -> continent questionnaire (français)
-    final regionLower = destination.region.toLowerCase().replaceAll(' ', '_');
-    
-    bool matches = false;
-    switch (regionLower) {
-      case 'europe':
-        matches = continent == 'Europe';
-        break;
-      case 'africa':
-        matches = continent == 'Afrique';
-        break;
-      case 'asia':
-        matches = continent == 'Asie';
-        break;
-      case 'south_america':
-        matches = continent == 'Amérique du Sud';
-        break;
-      case 'north_america':
-        matches = continent == 'Amérique du Nord';
-        break;
-      case 'oceania':
-        matches = continent == 'Océanie';
-        break;
-      default:
-        matches = false;
-    }
-    
-    // Debug log pour les 5 premières destinations
-    if (destination.id.hashCode % 50 == 0) {
-      print('      🔍 Debug: ${destination.city} (${destination.region}) vs "$continent" → $matches');
-    }
-    
-    return matches;
-  }
-
   /// Convertit une destination en chaîne de caractères
   static String destinationToString(Destination destination) {
     return '📍 ${destination.city}, ${destination.country} (${destination.region}) - Budget: ${destination.budgetLevel}';
   }
 
-
-
+  /// Vérifie si la destination correspond au continent demandé
+  static bool matchesContinent(Destination destination, String continent) {
+    return destination.region == continent;
+  }
 
   /// Récupère une destination par ID
   Future<Destination?> getDestinationById(String id) async {
-    final db = await database;
+    final db = await AppDatabase().database;
     
     try {
       final List<Map<String, dynamic>> maps = await db.query(
-        'destinations',
+        'destination',
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -126,11 +93,12 @@ class DestinationService {
 
   // Compte le nombre de destinations
   Future<int> getDestinationsCount() async {
-    final db = await database;
+    final db = await AppDatabase().database;
     
     try {
       final result = await db.rawQuery('SELECT COUNT(*) as count FROM destination');
-      return Sqflite.firstIntValue(result) ?? 0;
+      final count = result.first['count'] as int?;
+      return count ?? 0;
     } catch (e) {
       print('❌ Erreur comptage destinations: $e');
       return 0;
@@ -139,7 +107,7 @@ class DestinationService {
 
   /// Recherche de destinations par texte (ville, pays, tags)
   Future<List<Destination>> searchDestinations(String query) async {
-    final db = await database;
+    final db = await AppDatabase().database;
     
     try {
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
@@ -157,7 +125,7 @@ class DestinationService {
 
   /// Récupère toutes les destinations
   Future<List<Destination>> getAllDestinations() async {
-    final db = await database;
+    final db = await AppDatabase().database;
     
     try {
       final List<Map<String, dynamic>> maps = await db.query('destination');
@@ -174,7 +142,7 @@ class DestinationService {
 
   /// Récupère les destinations par continent/région
   Future<List<Destination>> getDestinationsByRegion(String region) async {
-    final db = await database;
+    final db = await AppDatabase().database;
     
     try {
       final List<Map<String, dynamic>> maps = await db.query(

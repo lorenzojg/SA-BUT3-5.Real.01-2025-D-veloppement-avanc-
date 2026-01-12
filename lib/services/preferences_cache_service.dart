@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../models/user_preferences_v2.dart';
+import '../models/user_preferences_model.dart';
 
 /// Service pour sauvegarder et charger les préférences utilisateur
 class PreferencesCacheService {

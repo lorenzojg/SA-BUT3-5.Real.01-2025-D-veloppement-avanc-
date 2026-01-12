@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/user_preferences_v2.dart';
+import '../models/user_preferences_model.dart';
 import '../services/preferences_cache_service.dart';
 import 'questionnaire_page.dart';
 

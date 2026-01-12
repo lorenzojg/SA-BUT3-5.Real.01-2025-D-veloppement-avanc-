@@ -1,5 +1,6 @@
-import '../models/user_preferences_v2.dart';
-import '../models/destination_v2.dart';
+import '../models/user_preferences_model.dart';
+import '../models/destination_model.dart';
+import 'destination_service.dart';
 
 /// Service pour mettre à jour les préférences utilisateur basé sur les interactions
 /// Utilisé après le mini-jeu like/dislike pour affiner les recommandations
@@ -17,8 +18,8 @@ class UserLearningService {
   /// Retourne les nouvelles préférences mises à jour
   UserPreferencesV2 updatePreferencesFromInteractions({
     required UserPreferencesV2 currentPrefs,
-    required List<DestinationV2> likedDestinations,
-    required List<DestinationV2> dislikedDestinations,
+    required List<Destination> likedDestinations,
+    required List<Destination> dislikedDestinations,
   }) {
     print('🧠 Apprentissage à partir de ${likedDestinations.length} likes et ${dislikedDestinations.length} dislikes');
 
@@ -81,21 +82,21 @@ class UserLearningService {
   /// Apprend le niveau d'activité préféré
   double _learnActivityLevel(
     double currentLevel,
-    List<DestinationV2> liked,
-    List<DestinationV2> disliked,
+    List<Destination> liked,
+    List<Destination> disliked,
   ) {
     if (liked.isEmpty && disliked.isEmpty) return currentLevel;
 
     // Calculer la moyenne des niveaux d'activité des destinations likées
     double likedAvg = 0.0;
     if (liked.isNotEmpty) {
-      likedAvg = liked.map((d) => d.calculateActivityScore()).reduce((a, b) => a + b) / liked.length;
+      likedAvg = liked.map((d) => DestinationService.calculateActivityScore(d)).reduce((a, b) => a + b) / liked.length;
     }
 
     // Calculer la moyenne des niveaux d'activité des destinations dislikées
     double dislikedAvg = 0.0;
     if (disliked.isNotEmpty) {
-      dislikedAvg = disliked.map((d) => d.calculateActivityScore()).reduce((a, b) => a + b) / disliked.length;
+      dislikedAvg = disliked.map((d) => DestinationService.calculateActivityScore(d)).reduce((a, b) => a + b) / disliked.length;
     }
 
     // Taux d'apprentissage: plus on a d'interactions, plus on ajuste
@@ -124,19 +125,19 @@ class UserLearningService {
   /// Apprend la préférence urbain/nature
   double _learnUrbanLevel(
     double currentLevel,
-    List<DestinationV2> liked,
-    List<DestinationV2> disliked,
+    List<Destination> liked,
+    List<Destination> disliked,
   ) {
     if (liked.isEmpty && disliked.isEmpty) return currentLevel;
 
     double likedAvg = 0.0;
     if (liked.isNotEmpty) {
-      likedAvg = liked.map((d) => d.calculateUrbanScore()).reduce((a, b) => a + b) / liked.length;
+      likedAvg = liked.map((d) => DestinationService.calculateUrbanScore(d)).reduce((a, b) => a + b) / liked.length;
     }
 
     double dislikedAvg = 0.0;
     if (disliked.isNotEmpty) {
-      dislikedAvg = disliked.map((d) => d.calculateUrbanScore()).reduce((a, b) => a + b) / disliked.length;
+      dislikedAvg = disliked.map((d) => DestinationService.calculateUrbanScore(d)).reduce((a, b) => a + b) / disliked.length;
     }
 
     final learningRate = _calculateLearningRate(liked.length + disliked.length);
@@ -160,8 +161,8 @@ class UserLearningService {
   double _learnTemperaturePreference(
     double currentMinTemp,
     int? travelMonth,
-    List<DestinationV2> liked,
-    List<DestinationV2> disliked,
+    List<Destination> liked,
+    List<Destination> disliked,
   ) {
     if (liked.isEmpty) return currentMinTemp;
 
@@ -170,7 +171,7 @@ class UserLearningService {
     // Extraire les températures des destinations likées
     final likedTemps = <double>[];
     for (final dest in liked) {
-      final temp = dest.getAvgTemp(month);
+      final temp = DestinationService.getAvgTemp(dest, month);
       if (temp != null) likedTemps.add(temp);
     }
 
@@ -191,13 +192,13 @@ class UserLearningService {
   /// Apprend la préférence de budget
   double _learnBudgetPreference(
     double currentBudget,
-    List<DestinationV2> liked,
-    List<DestinationV2> disliked,
+    List<Destination> liked,
+    List<Destination> disliked,
   ) {
     if (liked.isEmpty) return currentBudget;
 
     // Extraire les niveaux de budget des destinations likées
-    final likedBudgets = liked.map((d) => d.getBudgetLevelNumeric()).toList();
+    final likedBudgets = liked.map((d) => DestinationService.getBudgetLevelNumeric(d)).toList();
     final avgLikedBudget = likedBudgets.reduce((a, b) => a + b) / likedBudgets.length;
 
     final learningRate = _calculateLearningRate(liked.length) * 0.5; // Moins agressif pour le budget
@@ -209,7 +210,7 @@ class UserLearningService {
   /// Apprend les continents préférés
   List<String> _learnContinentPreferences(
     List<String> currentContinents,
-    List<DestinationV2> liked,
+    List<Destination> liked,
   ) {
     if (liked.isEmpty) return currentContinents;
 
@@ -264,7 +265,7 @@ class UserLearningService {
   /// Utilisé quand l'utilisateur like/dislike une destination individuellement
   UserPreferencesV2 updateFromSingleInteraction({
     required UserPreferencesV2 currentPrefs,
-    required DestinationV2 destination,
+    required Destination destination,
     required bool isLike,
   }) {
     // Learning rate faible pour une seule interaction
@@ -272,10 +273,10 @@ class UserLearningService {
 
     if (isLike) {
       // Ajuster vers les caractéristiques de la destination
-      final destActivity = destination.calculateActivityScore();
-      final destUrban = destination.calculateUrbanScore();
+      final destActivity = DestinationService.calculateActivityScore(destination);
+      final destUrban = DestinationService.calculateUrbanScore(destination);
       final month = currentPrefs.travelMonth ?? DateTime.now().month;
-      final destTemp = destination.getAvgTemp(month);
+      final destTemp = DestinationService.getAvgTemp(destination, month);
 
       return currentPrefs.copyWith(
         activityLevel: currentPrefs.activityLevel + (destActivity - currentPrefs.activityLevel) * learningRate,
@@ -286,8 +287,8 @@ class UserLearningService {
       );
     } else {
       // Dislike: s'éloigner légèrement des caractéristiques
-      final destActivity = destination.calculateActivityScore();
-      final destUrban = destination.calculateUrbanScore();
+      final destActivity = DestinationService.calculateActivityScore(destination);
+      final destUrban = DestinationService.calculateUrbanScore(destination);
 
       return currentPrefs.copyWith(
         activityLevel: currentPrefs.activityLevel - (destActivity - currentPrefs.activityLevel) * learningRate * 0.5,

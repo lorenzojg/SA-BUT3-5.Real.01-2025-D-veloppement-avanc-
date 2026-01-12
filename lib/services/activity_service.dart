@@ -1,14 +1,15 @@
 import '../models/activity_model.dart';
+import '../data/app_database.dart';
 
 /// Service pour gérer la logique métier liée aux activités
-/// Sépare la logique métier du modèle de données
+/// Sépare du modèle de données
 class ActivityService {
 
   // === Méthodes de scoring (statiques) ===
 
   /// Calcule un score d'activité (0-100)
   /// Plus c'est élevé, plus c'est sportif/actif
-  static double calculateActivityScore(ActivityModel activity) {
+  static double calculateActivityScore(Activity activity) {
     double score = 50.0; // Neutre par défaut
 
     // Catégories sportives/aventure
@@ -42,7 +43,7 @@ class ActivityService {
 
   /// Calcule un score d'urbanité (0-100)
   /// Plus c'est élevé, plus c'est urbain
-  static double calculateUrbanScore(ActivityModel activity) {
+  static double calculateUrbanScore(Activity activity) {
     double score = 50.0;
 
     // Urbain
@@ -62,7 +63,7 @@ class ActivityService {
   }
 
   /// Retourne le prix numérique basé sur le price_range
-  static double getPriceLevel(ActivityModel activity) {
+  static double getPriceLevel(Activity activity) {
     switch (activity.priceRange) {
       case 'Gratuit':
         return 0.0;
@@ -80,31 +81,55 @@ class ActivityService {
   }
 
   /// Vérifie si l'activité correspond à un niveau d'activité utilisateur (0-100)
-  static bool matchesActivityLevel(ActivityModel activity, double userActivityLevel) {
+  static bool matchesActivityLevel(Activity activity, double userActivityLevel) {
     final activityScore = calculateActivityScore(activity);
     // Tolérance de ±25 points
     return (activityScore - userActivityLevel).abs() <= 25.0;
   }
 
   /// Vérifie si l'activité correspond à une préférence urbain/nature (0-100)
-  static bool matchesUrbanLevel(ActivityModel activity, double userUrbanLevel) {
+  static bool matchesUrbanLevel(Activity activity, double userUrbanLevel) {
     final urbanScore = calculateUrbanScore(activity);
     // Tolérance de ±25 points
     return (urbanScore - userUrbanLevel).abs() <= 25.0;
   }
 
   /// Convertit une activité en chaîne de caractères
-  static String activityToString(ActivityModel activity) {
+  static String activityToString(Activity activity) {
     return '🎯 ${activity.name} (${activity.type}) - ${activity.priceRange.isEmpty ? 'Prix inconnu' : activity.priceRange}';
   }
 
   /// Récupère les activités pour une destination
-  Future<List<ActivityModel>> getActivitiesForDestination(String destinationId) async {
+  Future<List<Activity>> getActivitiesForDestination(String destinationId) async {
     // Methode à écrir ici directement dans cette classe
+    final db = await AppDatabase().database;
+    
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'activity',
+        where: 'destination_id = ?',
+        whereArgs: [destinationId],
+      );
+      
+      return maps.map((row) => Activity.fromMap(row)).toList();
+    } catch (e) {
+      print('❌ Erreur lecture activités pour destination $destinationId: $e');
+      return [];
+    }
   }
 
   /// Compte le nombre d'activités
   Future<int> getActivitiesCount() async {
     // Methode à écrir ici directement dans cette classe
+    final db = await AppDatabase().database;
+    
+    try {
+      final result = await db.rawQuery('SELECT COUNT(*) as count FROM activity');
+      final count = result.first['count'] as int?;
+      return count ?? 0;
+    } catch (e) {
+      print('❌ Erreur comptage activités: $e');
+      return 0;
+    }
   }
 }
