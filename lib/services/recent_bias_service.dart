@@ -1,10 +1,10 @@
 import 'dart:math';
-import '../models/user_vector.dart';
-import '../models/destination_v2.dart';
+import '../models/user_vector_model.dart';
+import '../models/destination_model.dart';
 
 /// Représente une interaction récente (like/dislike) avec timestamp
 class RecentInteraction {
-  final DestinationV2 destination;
+  final Destination destination;
   final String action; // 'like' ou 'dislike'
   final DateTime timestamp;
   
@@ -42,7 +42,7 @@ class RecentBiasService {
   static const int _maxHistory = 20;
 
   /// Ajoute une interaction récente
-  void addInteraction(DestinationV2 destination, String action) {
+  void addInteraction(Destination destination, String action) {
     _recentInteractions.add(RecentInteraction(
       destination: destination,
       action: action,
@@ -123,7 +123,7 @@ class RecentBiasService {
   }
 
   /// Convertit une destination en vecteur (approximation)
-  UserVector _destinationToUserVector(DestinationV2 dest) {
+  UserVector _destinationToUserVector(Destination dest) {
     // Température du mois actuel
     final currentMonth = DateTime.now().month;
     final currentTemp = dest.getAvgTemp(currentMonth) ?? 20.0; // Valeur par défaut si pas de données

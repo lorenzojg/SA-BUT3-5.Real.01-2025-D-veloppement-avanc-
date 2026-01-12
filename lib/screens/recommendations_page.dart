@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../models/destination_v2.dart';
-import '../models/user_preferences_v2.dart';
+import '../models/destination_model.dart';
+import '../models/user_preferences_model.dart';
 import '../services/recommendation_service_v2.dart';
 import '../services/user_learning_service.dart';
 import '../services/favorites_service.dart';
@@ -28,8 +28,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   final RecommendationServiceV2 _recoService = RecommendationServiceV2();
   final UserLearningService _learningService = UserLearningService();
 
-  List<DestinationV2> _destinations = [];
-  List<DestinationV2> _gameDestinations = []; // Destinations pour le mini-jeu (tous continents)
+  List<Destination> _destinations = [];
+  List<Destination> _gameDestinations = []; // Destinations pour le mini-jeu (tous continents)
   List<RecommendationResult> _results = [];
   late UserPreferencesV2 _userPreferences;
 
@@ -41,12 +41,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   // --- Mini-jeu state ---
   bool _gameStarted = false;
   int _currentRound = 0; // 1..5
-  DestinationV2? _currentChoice;
+  Destination? _currentChoice;
   final Set<String> _gameSeenIds = {}; // éviter répétitions pendant le jeu
   
   // Learning data for mini-game
-  final List<DestinationV2> _likedDestinations = [];
-  final List<DestinationV2> _dislikedDestinations = [];
+  final List<Destination> _likedDestinations = [];
+  final List<Destination> _dislikedDestinations = [];
 
   // Carousel controller
   final ScrollController _carouselController = ScrollController();
@@ -728,7 +728,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     }
   }
 
-  DestinationV2? _getRandomUnseenDestination() {
+  Destination? _getRandomUnseenDestination() {
     if (_gameDestinations.isEmpty) return null;
     final candidates = _gameDestinations
       .where((d) => !_gameSeenIds.contains(d.id))
@@ -741,7 +741,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   Future<void> _finishGameAndRecompute() async {
     // Use UserLearningService to update preferences
     if (_likedDestinations.isNotEmpty || _dislikedDestinations.isNotEmpty) {
-      final updatedPrefs = await _learningService.updatePreferencesFromInteractions(
+      final updatedPrefs = _learningService.updatePreferencesFromInteractions(
         currentPrefs: _userPreferences,
         likedDestinations: _likedDestinations,
         dislikedDestinations: _dislikedDestinations,

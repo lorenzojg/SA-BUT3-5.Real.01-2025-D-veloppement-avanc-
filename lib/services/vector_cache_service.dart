@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/destination_v2.dart';
-import '../models/destination_vector.dart';
-import '../models/user_vector.dart';
+import '../models/destination_model.dart';
+import '../models/destination_vector_model.dart';
+import '../models/user_vector_model.dart';
 import 'database_service_v2.dart';
 
 /// Service de cache des vecteurs précalculés
@@ -79,7 +79,7 @@ class VectorCacheService {
   }
 
   /// Calcule le vecteur pour une destination
-  DestinationVector _computeDestinationVector(DestinationV2 dest) {
+  DestinationVector _computeDestinationVector(Destination dest) {
     // Température moyenne sur l'année (normalisée)
     double avgTemp = 0.0;
     int tempCount = 0;
