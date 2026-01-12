@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-class ActivityModel {
+class Activity {
   final String idDestination;       // clé étrangère vers Destination
   final String name;
   final List<String> categories;          // Liste String à partir de json
@@ -12,7 +12,7 @@ class ActivityModel {
   final double latitude;
   final double longitude;
 
-  ActivityModel({
+  Activity({
     required this.idDestination,
     required this.name,
     required this.categories,
@@ -26,8 +26,8 @@ class ActivityModel {
   });
 
   // Conversion depuis SQLite
-  factory ActivityModel.fromMap(Map<String, dynamic> map) {
-    return ActivityModel(
+  factory Activity.fromMap(Map<String, dynamic> map) {
+    return Activity(
       idDestination: map['id_destination'] as String,
       name: map['name'] as String,
       categories: List<String>.from(jsonDecode(map['categories'] as String)),

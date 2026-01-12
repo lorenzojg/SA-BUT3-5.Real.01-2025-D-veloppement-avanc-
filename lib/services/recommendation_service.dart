@@ -1,20 +1,21 @@
 import 'dart:math';
-import '../models/destination_v2.dart';
-import '../models/activity_v2.dart';
-import '../models/user_preferences_v2.dart';
-import '../models/user_vector.dart';
-import '../models/destination_vector.dart';
-import '../data/database_service_v2.dart';
+import '../services/destination_service.dart';
+import '../services/activity_service.dart';
+import '../models/destination_model.dart';
+import '../models/activity_model.dart';
+import '../models/user_preferences_model.dart';
+import '../models/user_vector_model.dart';
+import '../models/destination_vector_model.dart';
 import 'vector_distance_service.dart';
 import 'vector_cache_service.dart';
 import 'recent_bias_service.dart';
 
 /// Résultat de recommandation avec le score détaillé
 class RecommendationResult {
-  final DestinationV2 destination;
+  final Destination destination;
   final double totalScore;
   final Map<String, double> scoreBreakdown;
-  final List<ActivityV2> topActivities;
+  final List<Activity> topActivities;
   final bool isSerendipity; // Flag pour indiquer si c'est une recommandation sérendipité
 
   RecommendationResult({
@@ -33,7 +34,8 @@ class RecommendationServiceV2 {
   factory RecommendationServiceV2() => _instance;
   RecommendationServiceV2._internal();
 
-  final DatabaseServiceV2 _db = DatabaseServiceV2();
+  final DestinationService _destinationService = DestinationService();
+  final ActivityService _activityService = ActivityService();
 
   /// Point d'entrée principal: recommande des destinations
   /// 
@@ -49,8 +51,7 @@ class RecommendationServiceV2 {
     print('   Préférences: continents=${prefs.selectedContinents}, budget=${prefs.budgetLevel}');
     
     // 1. Charger toutes les destinations
-    final allDestinations = await _db.getAllDestinations();
-    print('📊 ${allDestinations.length} destinations chargées depuis la DB');
+    final allDestinations = await _destinationService.getAllDestinations();
 
     // 2. Filtrer les destinations inadmissibles
     final eligibleDestinations = _filterEligibleDestinations(
@@ -78,8 +79,8 @@ class RecommendationServiceV2 {
   }
 
   /// Filtre les destinations non éligibles (filtres stricts)
-  List<DestinationV2> _filterEligibleDestinations(
-    List<DestinationV2> destinations,
+  List<Destination> _filterEligibleDestinations(
+    List<Destination> destinations,
     UserPreferencesV2 prefs,
   ) {
     print('🔍 === FILTRAGE DES DESTINATIONS ===');
@@ -101,7 +102,7 @@ class RecommendationServiceV2 {
       if (prefs.selectedContinents.isNotEmpty) {
         bool matchesContinent = false;
         for (final continent in prefs.selectedContinents) {
-          if (dest.matchesContinent(continent)) {
+          if (DestinationService.matchesContinent(dest, continent)) {
             matchesContinent = true;
             break;
           }
@@ -113,7 +114,7 @@ class RecommendationServiceV2 {
       }
 
       // Filtre 2: Budget (écart max de ±2 niveaux)
-      final destBudget = dest.getBudgetLevelNumeric();
+      final destBudget = DestinationService.getBudgetLevelNumeric(dest);
       if ((destBudget - prefs.budgetLevel).abs() > 2.0) {
         filteredByBudget++;
         return false;
@@ -130,7 +131,7 @@ class RecommendationServiceV2 {
 
   /// Calcule le score total d'une destination
   Future<RecommendationResult> _scoreDestination(
-    DestinationV2 destination,
+    Destination destination,
     UserPreferencesV2 prefs, {
     required bool includeActivities,
   }) async {
@@ -158,7 +159,7 @@ class RecommendationServiceV2 {
     totalScore += urbanScore;
 
     // === 5. Score des Activités (0-15 points) ===
-    List<ActivityV2> topActivities = [];
+    List<Activity> topActivities = [];
     if (includeActivities) {
       final activitiesScore = await _calculateActivitiesScore(
         destination,
@@ -166,7 +167,7 @@ class RecommendationServiceV2 {
       );
       breakdown['Activités'] = activitiesScore['score']!;
       totalScore += activitiesScore['score']!;
-      topActivities = activitiesScore['activities'] as List<ActivityV2>;
+      topActivities = activitiesScore['activities'] as List<Activity>;
     }
 
     // === 6. Bonus Prix Vol (0-5 points) ===
@@ -187,9 +188,9 @@ class RecommendationServiceV2 {
   /// Score de climat (0-25 points)
   /// Favorise les destinations avec une température proche de la préférence
   /// Système permissif: toutes les destinations ont un score (pas de filtrage binaire)
-  double _calculateClimateScore(DestinationV2 dest, UserPreferencesV2 prefs) {
+  double _calculateClimateScore(Destination dest, UserPreferencesV2 prefs) {
     final month = prefs.travelMonth ?? DateTime.now().month;
-    final avgTemp = dest.getAvgTemp(month);
+    final avgTemp = DestinationService.getAvgTemp(dest, month);
     
     if (avgTemp == null) return 12.5; // Score neutre si pas de données
 
@@ -213,8 +214,8 @@ class RecommendationServiceV2 {
 
   /// Score de budget (0-20 points)
   /// Favorise les destinations correspondant au budget
-  double _calculateBudgetScore(DestinationV2 dest, UserPreferencesV2 prefs) {
-    final destBudget = dest.getBudgetLevelNumeric();
+  double _calculateBudgetScore(Destination dest, UserPreferencesV2 prefs) {
+    final destBudget = DestinationService.getBudgetLevelNumeric(dest);
     final budgetDiff = (destBudget - prefs.budgetLevel).abs();
 
     // Score max si même niveau, décroît avec la différence
@@ -231,8 +232,8 @@ class RecommendationServiceV2 {
 
   /// Score d'activité (0-20 points)
   /// Compare le niveau d'activité de la destination avec la préférence
-  double _calculateActivityMatchScore(DestinationV2 dest, UserPreferencesV2 prefs) {
-    final destActivityLevel = dest.calculateActivityScore();
+  double _calculateActivityMatchScore(Destination dest, UserPreferencesV2 prefs) {
+    final destActivityLevel = DestinationService.calculateActivityScore(dest);
     final diff = (destActivityLevel - prefs.activityLevel).abs();
 
     // Score max si différence < 10, décroît ensuite
@@ -247,8 +248,8 @@ class RecommendationServiceV2 {
 
   /// Score urbain/nature (0-15 points)
   /// Compare la préférence urbain/nature avec la destination
-  double _calculateUrbanMatchScore(DestinationV2 dest, UserPreferencesV2 prefs) {
-    final destUrbanLevel = dest.calculateUrbanScore();
+  double _calculateUrbanMatchScore(Destination dest, UserPreferencesV2 prefs) {
+    final destUrbanLevel = DestinationService.calculateUrbanScore(dest);
     final diff = (destUrbanLevel - prefs.urbanLevel).abs();
 
     // Score max si différence < 15, décroît ensuite
@@ -264,22 +265,22 @@ class RecommendationServiceV2 {
   /// Score des activités (0-15 points)
   /// Analyse les activités liées à la destination
   Future<Map<String, dynamic>> _calculateActivitiesScore(
-    DestinationV2 dest,
+    Destination dest,
     UserPreferencesV2 prefs,
   ) async {
-    final activities = await _db.getActivitiesForDestination(dest.id);
+    final activities = await _activityService.getActivitiesForDestination(dest.id);
     
     if (activities.isEmpty) {
-      return {'score': 7.5, 'activities': <ActivityV2>[]};
+      return {'score': 7.5, 'activities': <Activity>[]};
     }
 
     // Calculer le match moyen des activités
     int matchCount = 0;
-    final matchingActivities = <ActivityV2>[];
+    final matchingActivities = <Activity>[];
 
     for (final activity in activities) {
-      final activityMatch = activity.matchesActivityLevel(prefs.activityLevel);
-      final urbanMatch = activity.matchesUrbanLevel(prefs.urbanLevel);
+      final activityMatch = ActivityService.matchesActivityLevel(activity, prefs.activityLevel);
+      final urbanMatch = ActivityService.matchesUrbanLevel(activity, prefs.urbanLevel);
       
       if (activityMatch && urbanMatch) {
         matchCount++;
@@ -299,9 +300,9 @@ class RecommendationServiceV2 {
 
   /// Bonus pour le prix du vol (0-5 points)
   /// Favorise les mois avec des vols moins chers
-  double _calculateFlightPriceBonus(DestinationV2 dest, UserPreferencesV2 prefs) {
+  double _calculateFlightPriceBonus(Destination dest, UserPreferencesV2 prefs) {
     final month = prefs.travelMonth ?? DateTime.now().month;
-    final flightPrice = dest.getFlightPrice(month);
+    final flightPrice = DestinationService.getFlightPrice(dest, month);
     
     if (flightPrice == null) return 2.5;
 
@@ -359,34 +360,34 @@ class RecommendationServiceV2 {
   /// Retourne un mix de destinations:
   /// - 40% des continents sélectionnés
   /// - 60% d'autres continents (pour découverte)
-  Future<List<DestinationV2>> getDiverseDestinationsForGame({
+  Future<List<Destination>> getDiverseDestinationsForGame({
     required UserPreferencesV2 prefs,
     int limit = 20,
   }) async {
     print('🎮 === CHARGEMENT DESTINATIONS POUR MINI-JEU ===');
     
     // Charger TOUTES les destinations (sans filtre de continent)
-    final allDestinations = await _db.getAllDestinations();
+    final allDestinations = await DestinationService().getAllDestinations();
     print('   📍 ${allDestinations.length} destinations disponibles');
     
     if (allDestinations.isEmpty) return [];
 
     // Filtrer seulement par budget (tolérance large)
     final budgetFiltered = allDestinations.where((dest) {
-      final destBudget = dest.getBudgetLevelNumeric();
+      final destBudget = DestinationService.getBudgetLevelNumeric(dest);
       return (destBudget - prefs.budgetLevel).abs() <= 3.0; // Très permissif
     }).toList();
     
     print('   💰 ${budgetFiltered.length} destinations après filtre budget souple');
 
     // Séparer destinations des continents sélectionnés vs autres
-    final fromSelectedContinents = <DestinationV2>[];
-    final fromOtherContinents = <DestinationV2>[];
+    final fromSelectedContinents = <Destination>[];
+    final fromOtherContinents = <Destination>[];
     
     for (final dest in budgetFiltered) {
       bool isFromSelected = false;
       for (final continent in prefs.selectedContinents) {
-        if (dest.matchesContinent(continent)) {
+        if (DestinationService.matchesContinent(dest, continent)) {
           isFromSelected = true;
           break;
         }
@@ -409,7 +410,7 @@ class RecommendationServiceV2 {
     final selectedCount = (limit * 0.4).round();
     final otherCount = limit - selectedCount;
     
-    final result = <DestinationV2>[];
+    final result = <Destination>[];
     result.addAll(fromSelectedContinents.take(selectedCount));
     result.addAll(fromOtherContinents.take(otherCount));
     
@@ -519,7 +520,7 @@ class RecommendationServiceV2 {
     final results = <RecommendationResult>[];
     
     // Charger les destinations
-    final allDestinations = await _db.getAllDestinations();
+    final allDestinations = await _destinationService.getAllDestinations();
     final destMap = {for (var d in allDestinations) d.id: d};
 
     // Calculer similarité pour chaque destination
@@ -562,10 +563,10 @@ class RecommendationServiceV2 {
 
   /// Calcule un bonus basé sur les activités (score séparé)
   Future<double> _calculateActivityBonus(
-    DestinationV2 dest,
+    Destination dest,
     UserVector userVector,
   ) async {
-    final activities = await _db.getActivitiesForDestination(dest.id);
+    final activities = await _activityService.getActivitiesForDestination(dest.id);
     
     if (activities.isEmpty) return 0.0;
 
@@ -575,8 +576,8 @@ class RecommendationServiceV2 {
       final activityLevel = userVector.activity * 100; // 0-1 → 0-100
       final urbanLevel = userVector.urban * 100;
       
-      if (activity.matchesActivityLevel(activityLevel) &&
-          activity.matchesUrbanLevel(urbanLevel)) {
+      if (ActivityService.matchesActivityLevel(activity, activityLevel) &&
+          ActivityService.matchesUrbanLevel(activity, urbanLevel)) {
         matchCount++;
       }
     }
@@ -587,7 +588,7 @@ class RecommendationServiceV2 {
   }
 
   /// Enregistre une interaction récente (like/dislike)
-  void recordInteraction(DestinationV2 destination, String action) {
+  void recordInteraction(Destination destination, String action) {
     _biasService.addInteraction(destination, action);
   }
 
@@ -624,7 +625,7 @@ class RecommendationServiceV2 {
     for (final reco in recommendations) {
       bool assigned = false;
       for (final continent in prefs.selectedContinents) {
-        if (reco.destination.matchesContinent(continent)) {
+        if (DestinationService.matchesContinent(reco.destination, continent)) {
           byContinent[continent]!.add(reco);
           assigned = true;
           break;

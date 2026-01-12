@@ -1,6 +1,7 @@
 import 'dart:math';
 import '../models/user_vector_model.dart';
 import '../models/destination_model.dart';
+import 'destination_service.dart';
 
 /// Représente une interaction récente (like/dislike) avec timestamp
 class RecentInteraction {
@@ -126,7 +127,7 @@ class RecentBiasService {
   UserVector _destinationToUserVector(Destination dest) {
     // Température du mois actuel
     final currentMonth = DateTime.now().month;
-    final currentTemp = dest.getAvgTemp(currentMonth) ?? 20.0; // Valeur par défaut si pas de données
+    final currentTemp = DestinationService.getAvgTemp(dest, currentMonth) ?? 20.0; // Valeur par défaut si pas de données
 
     // Continent vector
     final continentMapping = {
@@ -144,9 +145,9 @@ class RecentBiasService {
 
     return UserVector(
       temperature: UserVector.normalizeTemperature(currentTemp),
-      budget: UserVector.normalizeBudget(dest.getBudgetLevelNumeric()),
-      activity: dest.calculateActivityScore() / 100.0,
-      urban: dest.calculateUrbanScore() / 100.0,
+      budget: UserVector.normalizeBudget(DestinationService.getBudgetLevelNumeric(dest)),
+      activity: DestinationService.calculateActivityScore(dest) / 100.0,
+      urban: DestinationService.calculateUrbanScore(dest) / 100.0,
       culture: (dest.scoreCulture / 5.0).clamp(0.0, 1.0),
       adventure: (dest.scoreAdventure / 5.0).clamp(0.0, 1.0),
       nature: (dest.scoreNature / 5.0).clamp(0.0, 1.0),

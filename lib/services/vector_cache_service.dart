@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/destination_model.dart';
 import '../models/destination_vector_model.dart';
 import '../models/user_vector_model.dart';
-import 'database_service_v2.dart';
+import 'destination_service.dart';
 
 /// Service de cache des vecteurs précalculés
 /// Les vecteurs destinations sont calculés une fois puis stockés en cache
@@ -12,8 +12,6 @@ class VectorCacheService {
   factory VectorCacheService() => _instance;
   VectorCacheService._internal();
 
-  final DatabaseServiceV2 _db = DatabaseServiceV2();
-  
   // Cache en mémoire
   Map<String, DestinationVector>? _cachedDestinationVectors;
   bool _isComputing = false;
@@ -59,7 +57,8 @@ class VectorCacheService {
     print('🔄 Calcul des vecteurs destinations...');
     
     try {
-      final destinations = await _db.getAllDestinations();
+      final destinationService = DestinationService();
+      final destinations = await destinationService.getAllDestinations();
       final vectors = <String, DestinationVector>{};
 
       for (final dest in destinations) {
@@ -84,7 +83,7 @@ class VectorCacheService {
     double avgTemp = 0.0;
     int tempCount = 0;
     for (int month = 1; month <= 12; month++) {
-      final temp = dest.getAvgTemp(month);
+      final temp = DestinationService.getAvgTemp(dest, month);
       if (temp != null) {
         avgTemp += temp;
         tempCount++;
@@ -94,13 +93,13 @@ class VectorCacheService {
     final normalizedTemp = UserVector.normalizeTemperature(avgTemp);
 
     // Budget
-    final normalizedBudget = UserVector.normalizeBudget(dest.getBudgetLevelNumeric());
+    final normalizedBudget = UserVector.normalizeBudget(DestinationService.getBudgetLevelNumeric(dest));
 
     // Activity level (de adventure/wellness scores)
-    final activityScore = dest.calculateActivityScore() / 100.0; // 0-100 → 0-1
+    final activityScore = DestinationService.calculateActivityScore(dest) / 100.0; // 0-100 → 0-1
 
     // Urban level
-    final urbanScore = dest.calculateUrbanScore() / 100.0; // 0-100 → 0-1
+    final urbanScore = DestinationService.calculateUrbanScore(dest) / 100.0; // 0-100 → 0-1
 
     // Scores culture/adventure/nature (déjà 0-5)
     final culture = (dest.scoreCulture / 5.0).clamp(0.0, 1.0);

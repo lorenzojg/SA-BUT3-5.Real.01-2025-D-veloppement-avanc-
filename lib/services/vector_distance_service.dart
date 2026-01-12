@@ -1,5 +1,5 @@
 import 'dart:math';
-import '../models/user_vector.dart';
+import '../models/user_vector_model.dart';
 
 /// Service de calcul de distances vectorielles
 /// Utilise la similarité cosinus pour les recommandations

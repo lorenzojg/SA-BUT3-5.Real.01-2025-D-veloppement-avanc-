@@ -40,7 +40,7 @@ class _ClimatPageState extends State<ClimatPage> {
       _maxTemp = range['max']!;
       _loadingRange = false;
     });
-    print('🌡️ Plage de température: ${_minTemp}°C à ${_maxTemp}°C');
+    print('🌡️ Plage de température: $_minTemp°C à $_maxTemp°C');
   }
 
   // Convert slider (0-100) to Celsius (minTemp to maxTemp)

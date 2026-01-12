@@ -164,5 +164,9 @@ class Destination {
     );
   }
 
+  // getters et autres méthodes utiles peuvent être ajoutés ici
+
+  //getById
+  
   
 }

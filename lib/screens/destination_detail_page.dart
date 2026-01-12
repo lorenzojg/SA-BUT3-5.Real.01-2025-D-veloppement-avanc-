@@ -1,9 +1,10 @@
 
 import 'package:flutter/material.dart';
 import '../models/destination_model.dart';
-import '../services/activity_v2.dart';
+import '../models/activity_model.dart';
+import '../services/activity_service.dart';
+import '../services/destination_service.dart';
 import '../services/favorites_service.dart';
-import '../services/database_service_v2.dart';
 import 'package:countries_world_map/countries_world_map.dart';
 import 'package:countries_world_map/data/maps/world_map.dart';
 
@@ -23,12 +24,11 @@ class DestinationDetailPage extends StatefulWidget {
 
 class _DestinationDetailPageState extends State<DestinationDetailPage> {
   final FavoritesService _favoritesService = FavoritesService();
-  final DatabaseServiceV2 _db = DatabaseServiceV2();
   
   bool _isFavorite = false;
   bool _isLoading = true;
-  List<ActivityV2> _topActivities = [];
-  List<ActivityV2> _allActivities = [];
+  List<Activity> _topActivities = [];
+  List<Activity> _allActivities = [];
 
   @override
   void initState() {
@@ -46,13 +46,14 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
   }
 
   Future<void> _loadActivities() async {
-    final activities = await _db.getActivitiesForDestination(widget.destination.id);
+    final activityService = ActivityService();
+    final activities = await activityService.getActivitiesForDestination(widget.destination.id);
     
     // Sélectionner les 3 meilleures activités (par prix puis nom)
-    final sorted = List<ActivityV2>.from(activities);
+    final sorted = List<Activity>.from(activities);
     sorted.sort((a, b) {
       // Priorité: prix bas puis nom
-      final priceCompare = a.getPriceLevel().compareTo(b.getPriceLevel());
+      final priceCompare = ActivityService.getPriceLevel(a).compareTo(ActivityService.getPriceLevel(b));
       if (priceCompare != 0) return priceCompare;
       return a.name.compareTo(b.name);
     });
@@ -93,7 +94,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
   /// Récupère le prix du vol pour le mois en cours
   String _getFlightPriceForCurrentMonth() {
     final currentMonth = DateTime.now().month; // 1-12
-    final price = widget.destination.getFlightPrice(currentMonth);
+    final price = DestinationService.getFlightPrice(widget.destination, currentMonth);
     
     if (price == null || price == 0) {
       return 'Prix non disponible';
@@ -105,7 +106,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
   /// Récupère la température pour le mois en cours
   String _getCurrentMonthTemperature() {
     final currentMonth = DateTime.now().month; // 1-12
-    final temp = widget.destination.getAvgTemp(currentMonth);
+    final temp = DestinationService.getAvgTemp(widget.destination, currentMonth);
     
     if (temp == null) {
       return 'Température non disponible';
@@ -176,7 +177,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                   final month = index + 1;
                   final monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 
                                      'Jui', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-                  final temp = widget.destination.getAvgTemp(month);
+                  final temp = DestinationService.getAvgTemp(widget.destination, month);
                   
                   if (temp == null) return const SizedBox.shrink();
                   
@@ -734,7 +735,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
     
     // 2. Température actuelle
     final currentMonth = DateTime.now().month;
-    final currentTemp = widget.destination.getAvgTemp(currentMonth);
+    final currentTemp = DestinationService.getAvgTemp(widget.destination, currentMonth);
     if (currentTemp != null) {
       final tempEmoji = currentTemp > 25 ? '🔥' : currentTemp > 15 ? '☀️' : '🌤️';
       arguments.add('$tempEmoji Température actuelle : ${currentTemp.toInt()}°C');
@@ -1120,7 +1121,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
     );
   }
 
-  Widget _buildActivityCard(ActivityV2 activity) {
+  Widget _buildActivityCard(Activity activity) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
