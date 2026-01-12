@@ -436,6 +436,7 @@ class RecommendationServiceV2 {
   /// [serendipityRatio] Pourcentage de destinations en mode sérendipité (0.0-1.0)
   /// [includeRecentBias] Activer l'effet de mode court terme
   /// [continentOnlySerendipity] Si true, la sérendipité inverse UNIQUEMENT le continent (mini-jeu)
+  /// [excludeIds] IDs de destinations à exclure (pour éviter les doublons)
   /// 
   /// Retourne les destinations triées par similarité cosinus
   Future<List<RecommendationResult>> getRecommendationsVectorBased({
@@ -444,11 +445,15 @@ class RecommendationServiceV2 {
     double serendipityRatio = 0.1,  // 10% par défaut
     bool includeRecentBias = true,
     bool continentOnlySerendipity = false, // Nouveau paramètre pour mini-jeu
+    Set<String>? excludeIds, // Nouveau paramètre pour éviter les doublons
   }) async {
     print('🎯 === RECOMMANDATIONS VECTORIELLES ===');
     print('   Sérendipité: ${(serendipityRatio * 100).toStringAsFixed(0)}%');
     if (continentOnlySerendipity) {
       print('   🌍 Mode: Continent uniquement (mini-jeu)');
+    }
+    if (excludeIds != null && excludeIds.isNotEmpty) {
+      print('   🚫 Exclusions: ${excludeIds.length} destinations déjà montrées');
     }
     
     // 1. Convertir préférences en vecteur
@@ -460,8 +465,13 @@ class RecommendationServiceV2 {
       userVector = _biasService.applyRecentBias(userVector);
     }
     
-    // 3. Charger les vecteurs destinations (depuis cache)
-    final destVectors = await _cacheService.getDestinationVectors();
+    // 3. Charger les vecteurs destinations (depuis cache) et filtrer les exclusions
+    final allDestVectors = await _cacheService.getDestinationVectors();
+    final destVectors = excludeIds != null
+        ? Map.fromEntries(
+            allDestVectors.entries.where((e) => !excludeIds.contains(e.key))
+          )
+        : allDestVectors;
     print('   📊 ${destVectors.length} vecteurs destinations disponibles');
     
     // 4. Calculer le nombre de destinations en mode sérendipité
@@ -479,16 +489,23 @@ class RecommendationServiceV2 {
       limit: normalCount * 2,  // Charger plus pour pouvoir filtrer
     );
     
-    // 6. Calculer distances pour destinations sérendipité
+    // 6. Exclure les destinations déjà sélectionnées dans normalResults
+    final usedIds = normalResults.take(normalCount).map((r) => r.destination.id).toSet();
+    final remainingDestVectors = Map.fromEntries(
+      destVectors.entries.where((e) => !usedIds.contains(e.key))
+    );
+    print('   🚫 ${usedIds.length} destinations normales à exclure des sérendipité');
+    
+    // 7. Calculer distances pour destinations sérendipité (sur destinations restantes)
     final serendipityResults = await _computeVectorDistances(
       userVector: userVector,
-      destVectors: destVectors,
+      destVectors: remainingDestVectors,
       enableSerendipity: true,
       continentOnly: continentOnlySerendipity, // Utiliser le nouveau paramètre
       limit: serendipityCount,
     );
     
-    // 7. Combiner et mélanger
+    // 8. Combiner et mélanger
     final combined = <RecommendationResult>[
       ...normalResults.take(normalCount),
       ...serendipityResults,
@@ -496,7 +513,7 @@ class RecommendationServiceV2 {
     
     combined.shuffle(Random());
     
-    print('   ✅ ${combined.length} recommandations générées');
+    print('   ✅ ${combined.length} recommandations générées (garanties uniques)');
     return combined.take(limit).toList();
   }
 
@@ -657,6 +674,7 @@ class RecommendationServiceV2 {
 
     // Construire la liste équilibrée en alternant entre continents
     final balanced = <RecommendationResult>[];
+    final addedIds = <String>{}; // Track IDs pour éviter les doublons
     final iterators = <int, int>{};
     for (int i = 0; i < prefs.selectedContinents.length; i++) {
       iterators[i] = 0;
@@ -675,10 +693,15 @@ class RecommendationServiceV2 {
         final index = iterators[i]!;
         
         if (index < available.length) {
-          balanced.add(available[index]);
+          final candidate = available[index];
+          // Vérifier qu'on n'a pas déjà cette destination
+          if (!addedIds.contains(candidate.destination.id)) {
+            balanced.add(candidate);
+            addedIds.add(candidate.destination.id);
+            addedAny = true;
+            print('   ✓ Ajout $continent: ${candidate.destination.city}');
+          }
           iterators[i] = index + 1;
-          addedAny = true;
-          print('   ✓ Ajout $continent: ${available[index].destination.city}');
         }
       }
       
@@ -689,9 +712,12 @@ class RecommendationServiceV2 {
     // Si on n'a pas assez, compléter avec les meilleures restantes (tous continents)
     if (balanced.length < targetCount) {
       final remaining = recommendations
-          .where((r) => !balanced.contains(r))
+          .where((r) => !addedIds.contains(r.destination.id))
           .take(targetCount - balanced.length);
       balanced.addAll(remaining);
+      for (final r in remaining) {
+        addedIds.add(r.destination.id);
+      }
       print('   ➕ ${remaining.length} destinations supplémentaires pour compléter');
     }
 

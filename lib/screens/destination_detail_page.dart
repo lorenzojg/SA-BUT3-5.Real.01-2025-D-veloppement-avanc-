@@ -11,11 +11,19 @@ import 'package:countries_world_map/data/maps/world_map.dart';
 class DestinationDetailPage extends StatefulWidget {
   final Destination destination;
   final int? rank;
+  final bool isSerendipity;
+  final List<Destination>? allDestinations; // Liste complète pour navigation
+  final int? currentIndex; // Index actuel dans la liste
+  final Set<String>? serendipityIds; // IDs des destinations en mode sérendipité
 
   const DestinationDetailPage({
     super.key,
     required this.destination,
     this.rank,
+    this.isSerendipity = false,
+    this.allDestinations,
+    this.currentIndex,
+    this.serendipityIds,
   });
 
   @override
@@ -231,7 +239,66 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF1a3a52),
-      body: CustomScrollView(
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          // Swipe gauche = destination suivante (moins pertinente)
+          if (details.primaryVelocity! < -500 && widget.allDestinations != null && widget.currentIndex != null) {
+            final nextIndex = widget.currentIndex! + 1;
+            if (nextIndex < widget.allDestinations!.length) {
+              final nextDest = widget.allDestinations![nextIndex];
+              final isNextSerendipity = widget.serendipityIds?.contains(nextDest.id) ?? false;
+              Navigator.pushReplacement(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => DestinationDetailPage(
+                    destination: nextDest,
+                    rank: nextIndex + 1,
+                    isSerendipity: isNextSerendipity,
+                    allDestinations: widget.allDestinations,
+                    currentIndex: nextIndex,
+                    serendipityIds: widget.serendipityIds,
+                  ),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    const begin = Offset(1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOut;
+                    var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                    return SlideTransition(position: animation.drive(tween), child: child);
+                  },
+                ),
+              );
+            }
+          }
+          // Swipe droite = destination précédente (plus pertinente)
+          else if (details.primaryVelocity! > 500 && widget.allDestinations != null && widget.currentIndex != null) {
+            final prevIndex = widget.currentIndex! - 1;
+            if (prevIndex >= 0) {
+              final prevDest = widget.allDestinations![prevIndex];
+              final isPrevSerendipity = widget.serendipityIds?.contains(prevDest.id) ?? false;
+              Navigator.pushReplacement(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => DestinationDetailPage(
+                    destination: prevDest,
+                    rank: prevIndex + 1,
+                    isSerendipity: isPrevSerendipity,
+                    allDestinations: widget.allDestinations,
+                    currentIndex: prevIndex,
+                    serendipityIds: widget.serendipityIds,
+                  ),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    const begin = Offset(-1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOut;
+                    var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                    return SlideTransition(position: animation.drive(tween), child: child);
+                  },
+                ),
+              );
+            }
+          }
+        },
+        child: CustomScrollView(
         slivers: [
           // ===== APP BAR AVEC IMAGE DE FOND =====
           SliverAppBar(
@@ -299,6 +366,45 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                       ),
                     ),
                   ),
+                  // Badge sérendipité en haut à droite
+                  if (widget.isSerendipity || (widget.serendipityIds?.contains(widget.destination.id) ?? false))
+                    Positioned(
+                      top: 80,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade600,
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.purple.shade900.withOpacity(0.6),
+                              blurRadius: 12,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.explore,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Sortez des sentiers battus',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   // Informations en bas
                   Positioned(
                     bottom: 0,
@@ -310,8 +416,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Badge de rang (si disponible)
-                          if (widget.rank != null)
+                          // Badge de rang (seulement pour TOP 1)
+                          if (widget.rank != null && widget.rank == 1)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
@@ -582,6 +688,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -1122,18 +1229,20 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
   }
 
   Widget _buildActivityCard(Activity activity) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 1,
+    return GestureDetector(
+      onTap: () => _showActivityDetail(activity),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.1),
+            width: 1,
+          ),
         ),
-      ),
-      child: Row(
+        child: Row(
         children: [
           // Icône d'activité
           Container(
@@ -1199,7 +1308,305 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
               ),
             ),
         ],
+        ),
       ),
+    );
+  }
+
+  void _showActivityDetail(Activity activity) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: const Color(0xFF1a3a52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxWidth: 500,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // En-tête avec icône et nom
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.purple.shade700, Colors.purple.shade900],
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _getActivityIcon(activity.type),
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              activity.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              activity.type.toUpperCase(),
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                // Contenu défilable
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Prix
+                        if (activity.priceRange.isNotEmpty) ...[
+                          _buildDetailRow(
+                            Icons.euro,
+                            'Prix',
+                            activity.priceRange,
+                            Colors.green,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        // Adresse
+                        if (activity.address.isNotEmpty) ...[
+                          _buildDetailRow(
+                            Icons.location_on,
+                            'Adresse',
+                            activity.address,
+                            Colors.red,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        // Catégories
+                        if (activity.categories.isNotEmpty) ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.category,
+                                  color: Colors.blue,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Catégories',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: activity.categories.map((cat) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(15),
+                                            border: Border.all(
+                                              color: Colors.blue.withOpacity(0.5),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            cat,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        // Description
+                        if (activity.description.isNotEmpty) ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.description,
+                                  color: Colors.orange,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Description',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      activity.description,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        // Coordonnées GPS
+                        _buildDetailRow(
+                          Icons.pin_drop,
+                          'Coordonnées',
+                          '${activity.latitude.toStringAsFixed(4)}°, ${activity.longitude.toStringAsFixed(4)}°',
+                          Colors.purple,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Bouton Fermer
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Fermer',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

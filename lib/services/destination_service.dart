@@ -1,3 +1,5 @@
+import 'dart:math';
+import 'dart:convert';
 import '../data/app_database.dart';
 
 import '../models/destination_model.dart';
@@ -70,6 +72,93 @@ class DestinationService {
   /// Vérifie si la destination correspond au continent demandé
   static bool matchesContinent(Destination destination, String continent) {
     return destination.region == continent;
+  }
+
+  /// Convertit une destination en Map (pour sérialisation/cache)
+  static Map<String, dynamic> toMap(Destination destination) {
+    // Convertir avgTempMonthly en Map sérialisable
+    final tempMonthlyJson = <String, dynamic>{};
+    destination.avgTempMonthly.forEach((month, temps) {
+      tempMonthlyJson[month.toString()] = {
+        'avg': temps['avg'],
+        'max': temps['max'],
+        'min': temps['min'],
+      };
+    });
+
+    return {
+      'id': destination.id,
+      'ville': destination.city,
+      'pays': destination.country,
+      'region': destination.region,
+      'description': destination.description,
+      'latitude': destination.latitude,
+      'longitude': destination.longitude,
+      'avg_temp_monthly': jsonEncode(tempMonthlyJson),
+      'durees_ideales': jsonEncode(destination.idealDurations),
+      'budget': destination.budgetLevel,
+      'culture': destination.scoreCulture,
+      'adventure': destination.scoreAdventure,
+      'nature': destination.scoreNature,
+      'beaches': destination.scoreBeaches,
+      'nightlife': destination.scoreNightlife,
+      'cuisine': destination.scoreCuisine,
+      'wellness': destination.scoreWellness,
+      'urban': destination.scoreUrban,
+      'seclusion': destination.scoreSeclusion,
+      'input_aeroport': destination.inputAeroport,
+      'climat_details': destination.climatDetails,
+      'hebergement_moyen_eur_nuit': destination.hebergementMoyenEurNuit,
+      'periode_recommandee': destination.periodeRecommendee,
+      'prix_vol_par_mois': destination.prixVolParMois != null 
+          ? jsonEncode(destination.prixVolParMois) 
+          : jsonEncode([]),
+      'tags': jsonEncode(destination.tags),
+      'prix-moyen-hotel-basse-saison': destination.prixMoyenHotelBasseSaison,
+      'prix-moyen-hotel-haute-saison': destination.prixMoyenHotelHauteSaison,
+      'date-basse-saison': destination.dateBasseSaison?.toIso8601String(),
+      'date-haute-saison': destination.dateHauteSaison?.toIso8601String(),
+    };
+  }
+
+  /// Calcule la distance en kilomètres entre deux destinations (formule de Haversine)
+  /// Prend en compte la courbure de la Terre
+  static double calculateDistance(Destination dest1, Destination dest2) {
+    return calculateDistanceFromCoords(
+      dest1.latitude,
+      dest1.longitude,
+      dest2.latitude,
+      dest2.longitude,
+    );
+  }
+
+  /// Calcule la distance en km entre deux coordonnées GPS (formule de Haversine)
+  static double calculateDistanceFromCoords(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const earthRadiusKm = 6371.0;
+
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRadians(lat1)) *
+            cos(_toRadians(lat2)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    final distance = earthRadiusKm * c;
+
+    return distance;
+  }
+
+  /// Convertit degrés en radians
+  static double _toRadians(double degrees) {
+    return degrees * pi / 180.0;
   }
 
   /// Récupère une destination par ID

@@ -137,26 +137,30 @@ class _ClimatPageState extends State<ClimatPage> {
     
     // Espacement adaptatif
     final spacing = isSmallScreen ? 40.0 : 70.0;
+    final thermometerHeight = isSmallScreen ? 250.0 : 350.0;
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Labels de température à gauche
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            _buildTemperatureLabel('${temp5.round()}°', 'Tropical', Colors.red.shade300, isSmallScreen),
+            const SizedBox(height: 70), // Offset pour aligner avec le thermomètre
+            _buildTemperatureLabel('${temp5.round()}°', Colors.red.shade300, isSmallScreen),
             SizedBox(height: spacing),
-            _buildTemperatureLabel('${temp4.round()}°', 'Chaud', Colors.deepOrange.shade300, isSmallScreen),
+            _buildTemperatureLabel('${temp4.round()}°', Colors.deepOrange.shade300, isSmallScreen),
             SizedBox(height: spacing),
-            _buildTemperatureLabel('${temp3.round()}°', 'Tempéré', Colors.orange.shade300, isSmallScreen),
+            _buildTemperatureLabel('${temp3.round()}°', Colors.orange.shade300, isSmallScreen),
             SizedBox(height: spacing),
-            _buildTemperatureLabel('${temp2.round()}°', 'Frais', Colors.cyan.shade300, isSmallScreen),
+            _buildTemperatureLabel('${temp2.round()}°', Colors.cyan.shade300, isSmallScreen),
             SizedBox(height: spacing),
-            _buildTemperatureLabel('${temp1.round()}°', 'Froid', Colors.blue.shade300, isSmallScreen),
+            _buildTemperatureLabel('${temp1.round()}°', Colors.blue.shade300, isSmallScreen),
           ],
         ),
-        const SizedBox(width: 30),
+        const SizedBox(width: 20),
+        // Thermomètre cliquable au centre
         Column(
           children: [
             Container(
@@ -175,54 +179,59 @@ class _ClimatPageState extends State<ClimatPage> {
               ),
             ),
             const SizedBox(height: 10),
-            Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                Container(
-                  width: 40,
-                  height: isSmallScreen ? 250 : 350,
-                  decoration: BoxDecoration(
-                    color: Colors.white12,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                ),
-                Container(
-                  width: 34,
-                  height: (isSmallScreen ? 250 : 350) * (_temperatureLevel / 100),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.blue.shade400,
-                        Colors.cyan.shade400,
-                        Colors.orange.shade400,
-                        Colors.deepOrange.shade400,
-                        Colors.red.shade400,
-                      ],
-                      stops: const [0, 0.25, 0.5, 0.75, 1],
-                    ),
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                ),
-                Positioned(
-                  bottom: ((isSmallScreen ? 250 : 350) * (_temperatureLevel / 100) - 15).clamp(0, (isSmallScreen ? 235 : 335).toDouble()),
-                  child: Container(
-                    width: 50,
-                    height: 30,
+            GestureDetector(
+              onVerticalDragUpdate: (details) {
+                final RenderBox box = context.findRenderObject() as RenderBox;
+                final localPosition = details.localPosition;
+                
+                // Utiliser localPosition qui est relatif au GestureDetector lui-même
+                // Inverser : haut = 100%, bas = 0%
+                final newValue = 100 - ((localPosition.dy / thermometerHeight) * 100);
+                setState(() {
+                  _temperatureLevel = newValue.clamp(0.0, 100.0);
+                });
+              },
+              onVerticalDragDown: (details) {
+                // Permettre de cliquer directement sur le thermomètre
+                final localPosition = details.localPosition;
+                final newValue = 100 - ((localPosition.dy / thermometerHeight) * 100);
+                setState(() {
+                  _temperatureLevel = newValue.clamp(0.0, 100.0);
+                });
+              },
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  Container(
+                    width: 40,
+                    height: thermometerHeight,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: _temperatureColor, width: 3),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.arrow_left,
-                          color: Color(0xFF1a3a52), size: 20),
+                      color: Colors.white12,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: 3),
                     ),
                   ),
-                ),
-              ],
+                  Container(
+                    width: 34,
+                    height: thermometerHeight * (_temperatureLevel / 100),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.blue.shade400,
+                          Colors.cyan.shade400,
+                          Colors.orange.shade400,
+                          Colors.deepOrange.shade400,
+                          Colors.red.shade400,
+                        ],
+                        stops: const [0, 0.25, 0.5, 0.75, 1],
+                      ),
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
             Container(
@@ -245,78 +254,82 @@ class _ClimatPageState extends State<ClimatPage> {
             ),
           ],
         ),
-        const SizedBox(width: 30),
+        const SizedBox(width: 20),
+        // Description à droite (largeur fixe pour éviter le déplacement du thermomètre)
         SizedBox(
-          height: 470,
-          child: RotatedBox(
-            quarterTurns: 3,
-            child: Slider(
-              value: _temperatureLevel,
-              min: 0,
-              max: 100,
-              onChanged: (value) {
-                setState(() => _temperatureLevel = value);
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTemperatureLabel(String degree, String label, Color color, bool isSmallScreen) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(degree,
-            style: TextStyle(
-                color: color, fontSize: isSmallScreen ? 14 : 16, fontWeight: FontWeight.bold)),
-        Text(label,
-            style:
-                TextStyle(color: Colors.white70, fontSize: isSmallScreen ? 10 : 12)),
-      ],
-    );
-  }
-
-  Widget _buildNextButton() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-          decoration: BoxDecoration(
-            color: _temperatureColor.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _temperatureColor, width: 2),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          width: 140, // Largeur fixe pour stabiliser le layout
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(_temperatureEmoji, style: const TextStyle(fontSize: 30)),
-              const SizedBox(width: 15),
-              Text(
-                _temperatureDescription,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold),
+              SizedBox(height: thermometerHeight / 2 + 30), // Centrer verticalement
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.3, 0.0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Container(
+                  key: ValueKey<String>(_temperatureDescription), // Clé pour détecter le changement
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _temperatureColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: _temperatureColor, width: 2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _temperatureDescription,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 30),
-        ElevatedButton(
-          onPressed: _nextQuestion,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: const Color(0xFF1a3a52),
-            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-          child: const Text('Suivant'),
-        ),
       ],
+    );
+  }
+
+  Widget _buildTemperatureLabel(String degree, Color color, bool isSmallScreen) {
+    return Text(
+      degree,
+      style: TextStyle(
+        color: color,
+        fontSize: isSmallScreen ? 16 : 18,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildNextButton() {
+    return ElevatedButton(
+      onPressed: _nextQuestion,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1a3a52),
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(30),
+        ),
+      ),
+      child: const Text('Suivant'),
     );
   }
 }

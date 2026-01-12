@@ -58,6 +58,34 @@ class RecentBiasService {
     print('📝 Interaction ajoutée: $action sur ${destination.city} (${_recentInteractions.length} récentes)');
   }
 
+  /// Calcule les coordonnées moyennes des destinations récemment likées
+  /// Retourne {lat, lon} ou null si aucune interaction
+  Map<String, double>? getAverageRecentLocation() {
+    final recentLikes = _recentInteractions
+        .where((i) => i.action == 'like')
+        .toList();
+
+    if (recentLikes.isEmpty) return null;
+
+    double totalWeight = 0.0;
+    double weightedLat = 0.0;
+    double weightedLon = 0.0;
+
+    for (final interaction in recentLikes) {
+      final weight = interaction.getWeight();
+      weightedLat += interaction.destination.latitude * weight;
+      weightedLon += interaction.destination.longitude * weight;
+      totalWeight += weight;
+    }
+
+    if (totalWeight == 0) return null;
+
+    return {
+      'lat': weightedLat / totalWeight,
+      'lon': weightedLon / totalWeight,
+    };
+  }
+
   /// Calcule le vecteur utilisateur avec effet de mode court terme
   /// 
   /// [baseVector] Vecteur utilisateur de base

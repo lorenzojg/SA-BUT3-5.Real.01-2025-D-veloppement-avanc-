@@ -6,6 +6,7 @@ import '../services/recommendation_service.dart';
 import '../services/destination_service.dart';
 import '../services/user_learning_service.dart';
 import '../services/favorites_service.dart';
+import '../services/recommendations_cache_service.dart';
 import 'contact_page.dart';
 import 'about_page.dart';
 import 'reset_preferences_page.dart';
@@ -14,10 +15,12 @@ import 'destination_detail_page.dart';
 
 class RecommendationsPage extends StatefulWidget {
   final UserPreferencesV2 userPreferences;
+  final bool isAppStartup; // Indique si c'est le démarrage de l'app
 
   const RecommendationsPage({
     super.key,
     required this.userPreferences,
+    this.isAppStartup = false, // Par défaut, on ne considère pas comme démarrage
   });
 
   @override
@@ -28,6 +31,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   final FavoritesService _favoritesService = FavoritesService();
   final RecommendationServiceV2 _recoService = RecommendationServiceV2();
   final UserLearningService _learningService = UserLearningService();
+  final RecommendationsCacheService _cacheService = RecommendationsCacheService();
 
   List<Destination> _destinations = [];
   List<Destination> _gameDestinations = []; // Destinations pour le mini-jeu (tous continents)
@@ -38,6 +42,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 
   // Favorites
   Set<String> _favoriteIds = {};
+
+  // Tracking des destinations déjà montrées pour éviter doublons
+  final Set<String> _shownDestinationIds = {};
+  
+  // Tracking des destinations en mode sérendipité
+  final Set<String> _serendipityIds = {};
 
   // --- Mini-jeu state ---
   bool _gameStarted = false;
@@ -56,9 +66,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   void initState() {
     super.initState();
     _userPreferences = widget.userPreferences;
-    _loadRecommendations();
+    _loadRecommendationsFromCacheOrCompute(useCache: widget.isAppStartup);
     _loadFavorites();
-    _loadGameDestinations(); // Charger destinations pour mini-jeu
+    // Charger destinations pour mini-jeu en arrière-plan (sans await)
+    _loadGameDestinations();
   }
 
   @override
@@ -74,8 +85,60 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     });
   }
 
+  /// Charge les recommandations depuis le cache ou les calcule si nécessaire
+  /// [useCache] Si true, tente de charger depuis le cache (uniquement au démarrage de l'app)
+  Future<void> _loadRecommendationsFromCacheOrCompute({bool useCache = false}) async {
+    print('🔄 === CHARGEMENT DES RECOMMANDATIONS ===');
+    print('   Use cache: $useCache');
+    
+    // Tenter de charger depuis le cache UNIQUEMENT si c'est le démarrage de l'app
+    if (useCache) {
+      final cachedData = await _cacheService.loadRecommendations();
+      
+      if (cachedData != null) {
+        // Cache trouvé et valide
+        final destinations = cachedData['destinations'] as List<Destination>;
+        final serendipityIds = cachedData['serendipityIds'] as Set<String>;
+        
+        // Réinitialiser le tracking
+        _shownDestinationIds.clear();
+        
+        setState(() {
+          _destinations = destinations;
+          _shownDestinationIds.addAll(_destinations.map((d) => d.id));
+          _serendipityIds.clear();
+          _serendipityIds.addAll(serendipityIds);
+          _isLoading = false;
+        });
+        
+        // Recréer les RecommendationResult pour compatibilité
+        _results = destinations.map((dest) => RecommendationResult(
+          destination: dest,
+          totalScore: 0.0, // Score non important ici
+          scoreBreakdown: {},
+          topActivities: [],
+          isSerendipity: serendipityIds.contains(dest.id),
+        )).toList();
+        
+        print('✅ Recommandations chargées depuis le cache');
+        return;
+      }
+      
+      print('🔄 Pas de cache valide');
+    } else {
+      print('🔄 Cache désactivé (pas au démarrage)');
+    }
+    
+    // Calculer les recommandations
+    await _loadRecommendations();
+  }
+
   Future<void> _loadRecommendations() async {
     print('🔄 === CHARGEMENT DES RECOMMANDATIONS ===');
+    
+    // Réinitialiser le tracking pour cette nouvelle salve
+    _shownDestinationIds.clear();
+    
     setState(() => _isLoading = true);
     try {
       // Utilisation du système vectoriel avec 10% de sérendipité
@@ -84,6 +147,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         limit: 20,
         serendipityRatio: 0.10, // 10% de destinations surprenantes
         includeRecentBias: true, // Effet de mode court terme
+        excludeIds: _shownDestinationIds, // Exclure les destinations déjà montrées
       );
 
       print('📋 ${results.length} résultats obtenus');
@@ -98,8 +162,21 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
       setState(() {
         _results = balancedResults;
         _destinations = balancedResults.map((r) => r.destination).toList();
+        // Ajouter les nouvelles destinations au tracking
+        _shownDestinationIds.addAll(_destinations.map((d) => d.id));
+        // Tracker les destinations sérendipité
+        _serendipityIds.clear();
+        _serendipityIds.addAll(
+          balancedResults.where((r) => r.isSerendipity).map((r) => r.destination.id)
+        );
         _isLoading = false;
       });
+      
+      // Sauvegarder dans le cache pour la prochaine ouverture
+      _cacheService.saveRecommendations(
+        destinations: _destinations,
+        serendipityIds: _serendipityIds,
+      );
     } catch (e) {
       print('❌ Erreur chargement destinations: $e');
       setState(() => _isLoading = false);
@@ -110,13 +187,18 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   /// 50% de sérendipité avec inversion UNIQUEMENT du continent
   Future<void> _loadGameDestinations() async {
     try {
+      // Combiner les IDs déjà montrés avec les favoris pour le mini-jeu
+      final excludeIdsForGame = Set<String>.from(_shownDestinationIds)
+        ..addAll(_favoriteIds);
+      
       // Utiliser le système vectoriel avec 50% de sérendipité (continent uniquement)
       final results = await _recoService.getRecommendationsVectorBased(
         prefs: _userPreferences,
-        limit: 20,
+        limit: 5, // Seulement 5 destinations pour le mini-jeu
         serendipityRatio: 0.50, // 50% sérendipité
         includeRecentBias: false, // Pas d'effet de mode pour le jeu
         continentOnlySerendipity: true, // UNIQUEMENT inverser le continent
+        excludeIds: excludeIdsForGame, // Exclure destinations montrées ET favoris
       );
       
       setState(() {
@@ -314,7 +396,14 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => DestinationDetailPage(destination: best, rank: 1),
+            builder: (context) => DestinationDetailPage(
+              destination: best,
+              rank: 1,
+              isSerendipity: result.isSerendipity,
+              allDestinations: _destinations,
+              currentIndex: 0,
+              serendipityIds: _serendipityIds,
+            ),
           ),
         ).then((_) => _loadFavorites());
       },
@@ -419,7 +508,14 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                    Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => DestinationDetailPage(destination: best, rank: 1),
+                      builder: (context) => DestinationDetailPage(
+                        destination: best,
+                        rank: 1,
+                        isSerendipity: result.isSerendipity,
+                        allDestinations: _destinations,
+                        currentIndex: 0,
+                        serendipityIds: _serendipityIds,
+                      ),
                     ),
                   ).then((_) => _loadFavorites());
                 },
@@ -702,6 +798,15 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 
     // Avancer
     if (_currentRound >= 5) {
+      // Masquer immédiatement le jeu avant le recalcul
+      setState(() {
+        _gameStarted = false;
+        _currentRound = 0;
+        _currentChoice = null;
+        _gameSeenIds.clear();
+        _isLoading = true; // Afficher le loader pendant le recalcul
+      });
+      
       await _finishGameAndRecompute();
     } else {
       setState(() {
@@ -758,17 +863,16 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     _likedDestinations.clear();
     _dislikedDestinations.clear();
     
+    // Invalider le cache car le profil a changé
+    await _cacheService.clearCache();
+    
     // Recalculer la recommandation principale en tenant compte du profil mis à jour
     // On recharge via le service enrichi qui a pris en compte les interactions
     await _loadRecommendations();
     await _loadGameDestinations(); // Recharger aussi les destinations du jeu
 
-    setState(() {
-      _gameStarted = false;
-      _currentRound = 0;
-      _currentChoice = null;
-      _gameSeenIds.clear();
-    });
+    // _isLoading est déjà remis à false par _loadRecommendations()
+    // Pas besoin de re-setState ici, le jeu reste masqué (_gameStarted = false)
 
     // Retour utilisateur
     if (mounted) {
@@ -833,7 +937,14 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => DestinationDetailPage(destination: dest, rank: rank),
+            builder: (context) => DestinationDetailPage(
+              destination: dest,
+              rank: rank,
+              isSerendipity: result.isSerendipity,
+              allDestinations: _destinations,
+              currentIndex: rank - 1, // rank commence à 1, index à 0
+              serendipityIds: _serendipityIds,
+            ),
           ),
         ).then((_) => _loadFavorites());
       },
@@ -890,6 +1001,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                         style: const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                       const SizedBox(height: 8),
+                      // Étoiles pour toutes les destinations
                       Row(
                         children: [
                           Icon(Icons.star, size: 14, color: Colors.amber),
@@ -905,6 +1017,24 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             ),
           ],
         ),
+        // Cœur favori en haut à gauche
+        if (_favoriteIds.contains(dest.id))
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.favorite,
+                color: Colors.red,
+                size: 16,
+              ),
+            ),
+          ),
         // Badge sérendipité en haut à droite
         if (result.isSerendipity)
           Positioned(

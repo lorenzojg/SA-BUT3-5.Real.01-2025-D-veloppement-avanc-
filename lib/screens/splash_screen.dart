@@ -36,6 +36,7 @@ class _SplashScreenState extends State<SplashScreen> {
           MaterialPageRoute(
             builder: (context) => RecommendationsPage(
               userPreferences: cachedPrefs,
+              isAppStartup: true, // C'est le démarrage de l'app
             ),
           ),
         );
