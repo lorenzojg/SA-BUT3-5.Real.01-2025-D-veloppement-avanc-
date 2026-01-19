@@ -54,6 +54,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   
   // Tracking des destinations en mode sérendipité
   final Set<String> _serendipityIds = {};
+  
+  // Rangs originaux des destinations (basés sur les scores AVANT round-robin)
+  Map<String, int> _originalRanks = {};
 
   // --- Mini-jeu state ---
   bool _gameStarted = false;
@@ -105,6 +108,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         // Cache trouvé et valide
         final destinations = cachedData['destinations'] as List<Destination>;
         final serendipityIds = cachedData['serendipityIds'] as Set<String>;
+        final scores = cachedData['scores'] as Map<String, double>;
+        final ranks = cachedData['ranks'] as Map<String, int>;
         
         // Réinitialiser le tracking
         _shownDestinationIds.clear();
@@ -114,19 +119,20 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
           _shownDestinationIds.addAll(_destinations.map((d) => d.id));
           _serendipityIds.clear();
           _serendipityIds.addAll(serendipityIds);
+          _originalRanks = ranks; // Stocker les rangs originaux
           _isLoading = false;
         });
         
-        // Recréer les RecommendationResult pour compatibilité
+        // Recréer les RecommendationResult avec les VRAIS scores chargés depuis le cache
         _results = destinations.map((dest) => RecommendationResult(
           destination: dest,
-          totalScore: 0.0, // Score non important ici
+          totalScore: scores[dest.id] ?? 0.0, // Utiliser le vrai score du cache
           scoreBreakdown: {},
           topActivities: [],
           isSerendipity: serendipityIds.contains(dest.id),
         )).toList();
         
-        print('✅ Recommandations chargées depuis le cache');
+        print('✅ Recommandations chargées depuis le cache avec scores');
         return;
       }
       
@@ -159,7 +165,21 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 
       print('📋 ${results.length} résultats obtenus');
       
-      // Équilibrer les résultats par continent pour le carrousel
+      // 🎯 IMPORTANT : Attribuer les rangs AVANT l'équilibrage par continent
+      // Les rangs doivent refléter l'ordre des scores originaux, pas l'ordre après round-robin
+      final ranksMap = <String, int>{};
+      for (int i = 0; i < results.length; i++) {
+        ranksMap[results[i].destination.id] = i + 1; // Rang basé sur le score original
+      }
+      
+      // Créer une map des scores pour le cache
+      final scoresMap = <String, double>{};
+      for (final result in results) {
+        scoresMap[result.destination.id] = result.totalScore;
+      }
+      
+      // Équilibrer les résultats par continent pour le carrousel (round-robin)
+      // Cela change l'ORDRE mais pas les RANGS qui ont été attribués avant
       final balancedResults = _recoService.balanceByContinent(
         recommendations: results,
         prefs: _userPreferences,
@@ -176,13 +196,16 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         _serendipityIds.addAll(
           balancedResults.where((r) => r.isSerendipity).map((r) => r.destination.id)
         );
+        _originalRanks = ranksMap; // Stocker les rangs originaux
         _isLoading = false;
       });
       
-      // Sauvegarder dans le cache pour la prochaine ouverture
+      // Sauvegarder dans le cache pour la prochaine ouverture avec scores et rangs
       _cacheService.saveRecommendations(
         destinations: _destinations,
         serendipityIds: _serendipityIds,
+        scores: scoresMap,
+        ranks: ranksMap, // Rangs originaux basés sur les scores
       );
     } catch (e) {
       print('❌ Erreur chargement destinations: $e');
@@ -409,6 +432,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     final result = _results.first;
     final best = result.destination;
     final isFavorite = _favoriteIds.contains(best.id);
+    final rank = _originalRanks[best.id] ?? 1; // Utiliser le rang original
 
     return GestureDetector(
       onTap: () {
@@ -417,7 +441,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
           MaterialPageRoute(
             builder: (context) => DestinationDetailPage(
               destination: best,
-              rank: 1,
+              rank: rank, // Utiliser le rang original
               isSerendipity: result.isSerendipity,
               allDestinations: _destinations,
               currentIndex: 0,
@@ -524,12 +548,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
+                  final rank = _originalRanks[best.id] ?? 1; // Utiliser le rang original
                    Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => DestinationDetailPage(
                         destination: best,
-                        rank: 1,
+                        rank: rank, // Utiliser le rang original
                         isSerendipity: result.isSerendipity,
                         allDestinations: _destinations,
                         currentIndex: 0,
@@ -930,17 +955,20 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               physics: const BouncingScrollPhysics(),
               itemCount: list.length,
               itemBuilder: (context, index) {
+                final dest = list[index];
                 // Trouver le RecommendationResult correspondant
                 final result = _results.firstWhere(
-                  (r) => r.destination.id == list[index].id,
+                  (r) => r.destination.id == dest.id,
                   orElse: () => RecommendationResult(
-                    destination: list[index],
+                    destination: dest,
                     totalScore: 0,
                     scoreBreakdown: {},
                     topActivities: [],
                   ),
                 );
-                return _buildCarouselCard(result, index + 2); // +2 car rank 1 est en haut
+                // Utiliser le rang ORIGINAL depuis la map, pas l'index du carousel
+                final rank = _originalRanks[dest.id] ?? (index + 2);
+                return _buildCarouselCard(result, rank);
               },
             ),
           ),
