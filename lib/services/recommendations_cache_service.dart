@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/destination_model.dart';
-import '../services/recommendation_service.dart';
 import '../services/destination_service.dart';
 
 /// Service de cache pour sauvegarder les recommandations

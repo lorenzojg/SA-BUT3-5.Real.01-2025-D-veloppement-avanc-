@@ -7,11 +7,14 @@ import '../services/destination_service.dart';
 import '../services/user_learning_service.dart';
 import '../services/favorites_service.dart';
 import '../services/recommendations_cache_service.dart';
+import '../services/performance_profiler.dart';
 import 'contact_page.dart';
 import 'about_page.dart';
 import 'reset_preferences_page.dart';
 import 'favorites_page.dart';
 import 'destination_detail_page.dart';
+import 'performance_dashboard_page.dart';
+import '../services/recent_bias_service.dart';
 
 class RecommendationsPage extends StatefulWidget {
   final UserPreferencesV2 userPreferences;
@@ -32,6 +35,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   final RecommendationServiceV2 _recoService = RecommendationServiceV2();
   final UserLearningService _learningService = UserLearningService();
   final RecommendationsCacheService _cacheService = RecommendationsCacheService();
+  final PerformanceProfiler _profiler = PerformanceProfiler();
+  final RecentBiasService _biasService = RecentBiasService();
+
 
   List<Destination> _destinations = [];
   List<Destination> _gameDestinations = []; // Destinations pour le mini-jeu (tous continents)
@@ -148,6 +154,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         serendipityRatio: 0.10, // 10% de destinations surprenantes
         includeRecentBias: true, // Effet de mode court terme
         excludeIds: _shownDestinationIds, // Exclure les destinations déjà montrées
+        profiler: _profiler, // ✅ Passer le profiler pour mesures internes
       );
 
       print('📋 ${results.length} résultats obtenus');
@@ -251,6 +258,18 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.speed),
+            tooltip: 'Performance Dashboard',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PerformanceDashboardPage()),
+              );
+            },
+          ),
+        ],
       ),
       drawer: Drawer(
         child: Container(
@@ -845,43 +864,46 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   }
 
   Future<void> _finishGameAndRecompute() async {
-    // Use UserLearningService to update preferences
-    if (_likedDestinations.isNotEmpty || _dislikedDestinations.isNotEmpty) {
-      final updatedPrefs = _learningService.updatePreferencesFromInteractions(
-        currentPrefs: _userPreferences,
-        likedDestinations: _likedDestinations,
-        dislikedDestinations: _dislikedDestinations,
-      );
+    try {
+      // Update user preferences from mini-game interactions (sans mesure)
+      if (_likedDestinations.isNotEmpty || _dislikedDestinations.isNotEmpty) {
+        final updatedPrefs = _learningService.updatePreferencesFromInteractions(
+          currentPrefs: _userPreferences,
+          likedDestinations: _likedDestinations,
+          dislikedDestinations: _dislikedDestinations,
+        );
+        
+        setState(() {
+          _userPreferences = updatedPrefs;
+        });
+      }
       
-      // Update state
-      setState(() {
-        _userPreferences = updatedPrefs;
-      });
-    }
-    
-    // Clear lists
-    _likedDestinations.clear();
-    _dislikedDestinations.clear();
-    
-    // Invalider le cache car le profil a changé
-    await _cacheService.clearCache();
-    
-    // Recalculer la recommandation principale en tenant compte du profil mis à jour
-    // On recharge via le service enrichi qui a pris en compte les interactions
-    await _loadRecommendations();
-    await _loadGameDestinations(); // Recharger aussi les destinations du jeu
+      // Clear interaction lists (sans mesure)
+      _likedDestinations.clear();
+      _dislikedDestinations.clear();
+      
+      // Clear cache (sans mesure)
+      await _cacheService.clearCache();
+      
+      // Reload main recommendations (avec mesure - c'est l'important)
+      await _loadRecommendations();
+      
+      // Reload game destinations (sans mesure)
+      await _loadGameDestinations();
 
-    // _isLoading est déjà remis à false par _loadRecommendations()
-    // Pas besoin de re-setState ici, le jeu reste masqué (_gameStarted = false)
-
-    // Retour utilisateur
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Merci ! Vos recommandations ont été affinées.'),
-          backgroundColor: Colors.green,
-        )
-      );
+      // Show success message (sans mesure)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Merci ! Vos recommandations ont été affinées.'),
+            backgroundColor: Colors.green,
+          )
+        );
+      }
+      
+    } catch (e) {
+      print('❌ Error during recommendation recompute: $e');
+      rethrow;
     }
   }
 

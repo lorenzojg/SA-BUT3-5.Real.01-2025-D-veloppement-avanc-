@@ -121,6 +121,70 @@ class UserVector {
     return vector;
   }
   
+  /// Convertit des noms de continents en vecteur PONDÉRÉ (poids continus entre 0 et 1)
+  /// Les continents sélectionnés ont un poids initial égal, normalisé pour que la somme = 1
+  /// Exemple: ['Afrique', 'Asie'] → [0, 0.5, 0.5, 0, 0, 0]
+  static List<double> continentsToWeightedVector(List<String> continents) {
+    final mapping = {
+      'Europe': 0,
+      'Afrique': 1,
+      'Asie': 2,
+      'Amérique du Nord': 3,
+      'Amérique du Sud': 4,
+      'Océanie': 5,
+    };
+    
+    if (continents.isEmpty) {
+      // Si aucun continent sélectionné, répartition égale
+      return List<double>.filled(6, 1.0 / 6.0);
+    }
+    
+    final vector = List<double>.filled(6, 0.0);
+    final weight = 1.0 / continents.length; // Poids égal pour chaque continent sélectionné
+    
+    for (final continent in continents) {
+      final index = mapping[continent];
+      if (index != null) {
+        vector[index] = weight;
+      }
+    }
+    
+    return vector;
+  }
+  
+  /// Convertit un Map de poids (continent → poids) en vecteur de 6 dimensions
+  /// Normalise automatiquement pour que la somme = 1
+  static List<double> weightsMapToVector(Map<String, double> weights) {
+    final mapping = {
+      'Europe': 0,
+      'Afrique': 1,
+      'Asie': 2,
+      'Amérique du Nord': 3,
+      'Amérique du Sud': 4,
+      'Océanie': 5,
+    };
+    
+    final vector = List<double>.filled(6, 0.0);
+    double totalWeight = 0.0;
+    
+    weights.forEach((continent, weight) {
+      final index = mapping[continent];
+      if (index != null) {
+        vector[index] = weight;
+        totalWeight += weight;
+      }
+    });
+    
+    // Normaliser pour que la somme = 1
+    if (totalWeight > 0) {
+      for (int i = 0; i < vector.length; i++) {
+        vector[i] /= totalWeight;
+      }
+    }
+    
+    return vector;
+  }
+  
   /// Interpole entre deux vecteurs avec un learning rate
   /// Utilisé pour l'évolution du profil utilisateur
   static UserVector interpolate(UserVector a, UserVector b, double alpha) {

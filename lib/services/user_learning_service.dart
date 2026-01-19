@@ -57,18 +57,22 @@ class UserLearningService {
       dislikedDestinations,
     );
 
-    // === 5. Mise à jour des continents (ajout de préférences) ===
-    final newContinents = _learnContinentPreferences(
+    // === 5. Mise à jour des poids continentaux ===
+    final newWeights = _learnContinentWeights(
       currentPrefs.selectedContinents,
+      currentPrefs.continentWeights,
       likedDestinations,
     );
+    
+    // Extraire les continents avec poids > 0
+    final newContinents = newWeights.keys.toList();
 
     print('📊 Mise à jour:');
     print('   Activité: ${currentPrefs.activityLevel.toStringAsFixed(1)} → ${newActivityLevel.toStringAsFixed(1)}');
     print('   Urbain: ${currentPrefs.urbanLevel.toStringAsFixed(1)} → ${newUrbanLevel.toStringAsFixed(1)}');
     print('   Temp: ${currentPrefs.minTemperature.toStringAsFixed(1)} → ${newMinTemperature.toStringAsFixed(1)}°C');
     print('   Budget: ${currentPrefs.budgetLevel.toStringAsFixed(1)} → ${newBudgetLevel.toStringAsFixed(1)}');
-    print('   Continents: ${currentPrefs.selectedContinents.join(", ")} → ${newContinents.join(", ")}');
+    print('   Poids continents: $newWeights');
 
     return currentPrefs.copyWith(
       activityLevel: newActivityLevel,
@@ -76,6 +80,7 @@ class UserLearningService {
       minTemperature: newMinTemperature,
       budgetLevel: newBudgetLevel,
       selectedContinents: newContinents,
+      continentWeights: newWeights,
     );
   }
 
@@ -207,44 +212,69 @@ class UserLearningService {
     return newBudget.clamp(0, 4);
   }
 
-  /// Apprend les continents préférés
-  List<String> _learnContinentPreferences(
-    List<String> currentContinents,
+  /// Apprend les poids des continents préférés basé sur les interactions
+  /// Retourne un Map<continent, poids> mis à jour
+  Map<String, double> _learnContinentWeights(
+    List<String> selectedContinents,
+    Map<String, double>? currentWeights,
     List<Destination> liked,
   ) {
-    if (liked.isEmpty) return currentContinents;
+    if (liked.isEmpty) {
+      // Pas de likes, retourner les poids actuels ou créer des poids égaux
+      if (currentWeights != null && currentWeights.isNotEmpty) {
+        return Map<String, double>.from(currentWeights);
+      }
+      // Créer des poids égaux pour les continents sélectionnés
+      final weight = 1.0 / selectedContinents.length;
+      return {for (var c in selectedContinents) c: weight};
+    }
 
-    // Compter les continents des destinations likées
-    final continentCount = <String, int>{};
+    final allContinents = ['Europe', 'Afrique', 'Asie', 'Amérique du Nord', 'Amérique du Sud', 'Océanie'];
+    
+    // Initialiser les poids (depuis les poids actuels ou égaux)
+    final weights = <String, double>{};
+    if (currentWeights != null && currentWeights.isNotEmpty) {
+      weights.addAll(currentWeights);
+    } else {
+      // Poids initiaux égaux pour les continents sélectionnés
+      final initWeight = 1.0 / selectedContinents.length;
+      for (final continent in selectedContinents) {
+        weights[continent] = initWeight;
+      }
+    }
+    
+    // Compter les likes par continent
+    final likeCounts = <String, int>{};
     for (final dest in liked) {
-      final mapping = {
-        'europe': 'Europe',
-        'africa': 'Afrique',
-        'asia': 'Asie',
-        'south_america': 'Amérique du Sud',
-        'north_america': 'Amérique du Nord',
-        'oceania': 'Océanie',
-        'antarctica': 'Antarctique',
-      };
-      
-      final continent = mapping[dest.region.toLowerCase()];
-      if (continent != null) {
-        continentCount[continent] = (continentCount[continent] ?? 0) + 1;
+      for (final continent in allContinents) {
+        if (DestinationService.matchesContinent(dest, continent)) {
+          likeCounts[continent] = (likeCounts[continent] ?? 0) + 1;
+          break;
+        }
       }
     }
 
-    // Ajouter les continents populaires (> 20% des likes)
-    final newContinents = List<String>.from(currentContinents);
-    final threshold = liked.length * 0.2;
+    // Learning rate basé sur le nombre d'interactions
+    final learningRate = _calculateLearningRate(liked.length) * 0.5;
     
-    continentCount.forEach((continent, count) {
-      if (count >= threshold && !newContinents.contains(continent)) {
+    // Mettre à jour les poids pour les continents likés
+    likeCounts.forEach((continent, count) {
+      final boost = learningRate * count;
+      weights[continent] = (weights[continent] ?? 0.0) + boost;
+      
+      // Ajouter le continent aux sélectionnés s'il n'y est pas
+      if (!selectedContinents.contains(continent)) {
         print('🌍 Ajout du continent "$continent" ($count/${liked.length} likes)');
-        newContinents.add(continent);
       }
     });
 
-    return newContinents;
+    // Renormaliser pour que la somme = 1
+    final totalWeight = weights.values.fold(0.0, (sum, w) => sum + w);
+    if (totalWeight > 0) {
+      weights.updateAll((key, value) => value / totalWeight);
+    }
+
+    return weights;
   }
 
   /// Calcule le taux d'apprentissage basé sur le nombre d'interactions
@@ -277,6 +307,40 @@ class UserLearningService {
       final destUrban = DestinationService.calculateUrbanScore(destination);
       final month = currentPrefs.travelMonth ?? DateTime.now().month;
       final destTemp = DestinationService.getAvgTemp(destination, month);
+      
+      // Trouver le continent de la destination
+      final allContinents = ['Europe', 'Afrique', 'Asie', 'Amérique du Nord', 'Amérique du Sud', 'Océanie'];
+      String? destContinent;
+      for (final continent in allContinents) {
+        if (DestinationService.matchesContinent(destination, continent)) {
+          destContinent = continent;
+          break;
+        }
+      }
+      
+      // Mettre à jour les poids continentaux
+      final weights = Map<String, double>.from(currentPrefs.continentWeights ?? {});
+      if (weights.isEmpty) {
+        // Initialiser avec poids égaux
+        for (final c in currentPrefs.selectedContinents) {
+          weights[c] = 1.0 / currentPrefs.selectedContinents.length;
+        }
+      }
+      
+      if (destContinent != null) {
+        weights[destContinent] = (weights[destContinent] ?? 0.0) + learningRate;
+        // Renormaliser
+        final sum = weights.values.fold(0.0, (a, b) => a + b);
+        if (sum > 0) {
+          weights.updateAll((key, value) => value / sum);
+        }
+      }
+      
+      // Ajouter le continent s'il n'est pas dans la liste
+      final newContinents = List<String>.from(currentPrefs.selectedContinents);
+      if (destContinent != null && !newContinents.contains(destContinent)) {
+        newContinents.add(destContinent);
+      }
 
       return currentPrefs.copyWith(
         activityLevel: currentPrefs.activityLevel + (destActivity - currentPrefs.activityLevel) * learningRate,
@@ -284,6 +348,8 @@ class UserLearningService {
         minTemperature: destTemp != null 
             ? currentPrefs.minTemperature + (destTemp - 3.0 - currentPrefs.minTemperature) * learningRate
             : currentPrefs.minTemperature,
+        selectedContinents: newContinents,
+        continentWeights: weights,
       );
     } else {
       // Dislike: s'éloigner légèrement des caractéristiques

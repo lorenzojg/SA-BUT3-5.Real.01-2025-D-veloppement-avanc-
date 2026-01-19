@@ -38,6 +38,8 @@ dependencies:
   shared_preferences: ^2.5.3
   sqflite_common_ffi: ^2.3.6
   csv: ^6.0.0
+  fl_chart: ^0.69.0
+  battery_plus: ^7.0.0
 
 
 dev_dependencies:
