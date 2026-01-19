@@ -90,8 +90,8 @@ class _SplashScreenState extends State<SplashScreen> {
           children: [
             Image.asset(
               'assets/images/icon/icon.png',
-              width: 120,
-              height: 120,
+              width: 300,
+              height: 300,
               errorBuilder: (context, error, stackTrace) {
                 return const Icon(Icons.flight, size: 60, color: Colors.white);
               },

@@ -31,7 +31,7 @@ class _ContactPageState extends State<ContactPage> {
         'Message:\n${_messageController.text}'
       );
       
-      final emailUri = Uri.parse('mailto:votre.email@example.com?subject=$subject&body=$body');
+      final emailUri = Uri.parse('mailto:serendia.contact@gmail.com?subject=$subject&body=$body');
       
       if (await canLaunchUrl(emailUri)) {
         await launchUrl(emailUri);
@@ -180,12 +180,7 @@ class _ContactPageState extends State<ContactPage> {
                     const SizedBox(height: 15),
                     _buildContactInfo(
                       Icons.email,
-                      'contact@travelrecommender.com',
-                    ),
-                    const SizedBox(height: 10),
-                    _buildContactInfo(
-                      Icons.phone,
-                      '+33 1 23 45 67 89',
+                      'serendia.contact@gmail.com',
                     ),
                   ],
                 ),
