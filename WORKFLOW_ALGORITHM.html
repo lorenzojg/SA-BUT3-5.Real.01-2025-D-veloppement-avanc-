@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Algorithmique - Système de Recommandation Vectoriel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            margin-top: 60px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        nav {
+            background: #2c3e50;
+            padding: 12px 40px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        nav button {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: all 0.3s;
+            display: block;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 1em;
+            font-family: inherit;
+        }
+
+        nav button:hover {
+            background: #667eea;
+            transform: translateY(-2px);
+        }
+
+        nav button.active {
+            background: #667eea;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        .main-container {
+            display: flex;
+            margin-top: 54px;
+        }
+
+        .sidebar {
+            width: 300px;
+            position: fixed;
+            left: 0;
+            top: 110px;
+            bottom: 0;
+            background: #f8f9fa;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 2px solid #e0e0e0;
+            z-index: 100;
+            transition: transform 0.3s;
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-300px);
+        }
+
+        .sidebar-toggle {
+            position: fixed;
+            left: 10px;
+            top: 120px;
+            z-index: 101;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s;
+        }
+
+        .sidebar-toggle:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .sidebar-toggle.collapsed {
+            left: 10px;
+        }
+
+        .sidebar h3 {
+            color: #667eea;
+            font-size: 1em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .sidebar li {
+            margin: 5px 0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: all 0.3s;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+
+        .sidebar li:hover {
+            background: #e8f5e9;
+        }
+
+        .sidebar li.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+
+        .sidebar li.sub-item {
+            padding-left: 20px;
+            font-size: 0.8em;
+        }
+
+        .content {
+            margin-left: 320px;
+            padding: 40px;
+            padding-top: 20px;
+            flex: 1;
+            transition: margin-left 0.3s;
+        }
+
+        .content.full-width {
+            margin-left: 0;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        section {
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            color: #667eea;
+            font-size: 2em;
+            margin: 30px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        h3 {
+            color: #764ba2;
+            font-size: 1.5em;
+            margin: 25px 0 15px;
+        }
+
+        h4 {
+            color: #2c3e50;
+            font-size: 1.2em;
+            margin: 20px 0 10px;
+        }
+
+        .file-badge {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow-x: auto;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .keyword { color: #ff79c6; }
+        .function { color: #50fa7b; }
+        .string { color: #f1fa8c; }
+        .comment { color: #6272a4; }
+        .number { color: #bd93f9; }
+
+        .result-box {
+            background: #e8f5e9;
+            border-left: 5px solid #4caf50;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        .result-box h4 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+
+        .example-box {
+            background: #fff3e0;
+            border-left: 5px solid #ff9800;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        .example-box h4 {
+            color: #e65100;
+            margin-top: 0;
+        }
+
+        .workflow-diagram {
+            background: #f5f5f5;
+            border: 2px solid #667eea;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 10px;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.8;
+        }
+
+        .step-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+
+        .step-card:hover {
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            transform: translateY(-5px);
+        }
+
+        .step-number {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 40px;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-right: 15px;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        .complexity-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .complexity-constant {
+            background: #4caf50;
+            color: white;
+        }
+
+        .complexity-linear {
+            background: #2196f3;
+            color: white;
+        }
+
+        .complexity-nlogn {
+            background: #ff9800;
+            color: white;
+        }
+
+        .optimization-card {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-left: 5px solid #667eea;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        .gain-badge {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+
+        .warning-box {
+            background: #ffebee;
+            border-left: 5px solid #f44336;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        ul {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        .toc {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            margin: 10px 0;
+        }
+
+        .toc a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .toc a:hover {
+            color: #764ba2;
+            padding-left: 10px;
+        }
+
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+
+        footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 30px;
+            margin-top: 40px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .sidebar {
+                transform: translateX(-300px);
+            }
+
+            .sidebar-toggle {
+                display: block;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            nav ul {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            table {
+                font-size: 0.9em;
+            }
+        }
+
+        .highlight-yellow {
+            background: #fff9c4;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .highlight-green {
+            background: #c8e6c9;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .arrow {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Workflow Algorithmique</h1>
+            <p>Système de Recommandation Vectoriel avec Optimisation Continentale</p>
+        </header>
+
+        <nav>
+            <ul>
+                <li><button onclick="switchTab('workflow1')" class="tab-btn active" data-tab="workflow1">📊 Workflow 1: Recommandations</button></li>
+                <li><button onclick="switchTab('zoom-algo')" class="tab-btn" data-tab="zoom-algo">🔍 Zoom Algorithme</button></li>
+                <li><button onclick="switchTab('workflow2')" class="tab-btn" data-tab="workflow2">🧠 Workflow 2: Apprentissage</button></li>
+                <li><button onclick="switchTab('example')" class="tab-btn" data-tab="example">💡 Exemple Complet</button></li>
+            </ul>
+        </nav>
+
+        <div class="main-container">
+            <!-- TOGGLE BUTTON -->
+            <button class="sidebar-toggle" onclick="toggleSidebar()" title="Afficher/Masquer la vue d'ensemble">☰</button>
+            
+            <!-- SIDEBAR -->
+            <div class="sidebar">
+                <h3>Vue d'ensemble</h3>
+                <ul id="sidebar-nav"></ul>
+            </div>
+
+            <div class="content">
+            <!-- WORKFLOW 1 -->
+            <section id="workflow1" class="tab-content active" data-steps='[
+                "Point d&apos;entrée",
+                "Conversion en vecteur",
+                "Biais court terme",
+                "Recherche sérendipité",
+                "Filtrage par continent",
+                "Calcul des poids",
+                "Calcul par continent",
+                "Combinaison round-robin",
+                "Combinaison finale"
+            ]'>
+                <h2><span class="emoji">📊</span>Workflow 1 : Génération des Recommandations</h2>
+
+                <div class="step-card">
+                    <h3>Point d'entrée : <span class="file-badge">recommendations_page.dart</span></h3>
+                    <div class="code-block">
+                        <pre><span class="comment">// Fichier: lib/screens/recommendations_page.dart</span>
+<span class="keyword">final</span> results = <span class="keyword">await</span> _recoService.<span class="function">getRecommendationsVectorBased</span>(
+  prefs: _userPreferences,
+  limit: <span class="number">20</span>,
+  serendipityRatio: <span class="number">0.10</span>,
+  includeRecentBias: <span class="keyword">true</span>,
+  excludeIds: _shownDestinationIds,
+);</pre>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">1</span>Conversion des préférences en vecteur</h3>
+                    <span class="file-badge">recommendation_service.dart</span>
+                    <div class="code-block">
+                        <pre>UserVector userVector = prefs.<span class="function">toVector</span>();</pre>
+                    </div>
+                    <p class="arrow">↓ Appel vers</p>
+                    <span class="file-badge">user_preferences_model.dart → toVector()</span>
+                    
+                    <div class="result-box">
+                        <h4>Résultat : Vecteur 13D</h4>
+                        <p><strong>Format :</strong> <code>[temp, budget, activity, urban, culture, adventure, nature, C1, C2, C3, C4, C5, C6]</code></p>
+                        <p><strong>Exemple :</strong></p>
+                        <ul>
+                            <li>Préférences : Europe (0.5), Afrique (0.5)</li>
+                            <li>Vecteur : <span class="highlight-yellow">[0.5, 0.5, 0.6, 0.4, 0.4, 0.6, 0.6, 0.5, 0.5, 0, 0, 0, 0]</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">2</span>Application du biais à court terme</h3>
+                    <span class="file-badge">recent_bias_service.dart → applyRecentBias()</span>
+                    <div class="code-block">
+                        <pre><span class="keyword">if</span> (includeRecentBias) {
+  userVector = _biasService.<span class="function">applyRecentBias</span>(userVector);
+}</pre>
+                    </div>
+                    <div class="result-box">
+                        <h4>Résultat</h4>
+                        <p>Vecteur ajusté avec les 10 dernières interactions (7 jours)</p>
+                        <p>Mélange : <strong>90% vecteur base + 10% tendance récente</strong></p>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">3</span>Recherche des destinations sérendipité</h3>
+                    <h4>3.1 Calcul du nombre de destinations sérendipité</h4>
+                    <div class="code-block">
+                        <pre><span class="keyword">final</span> serendipityCount = max(<span class="number">2</span>, (limit * serendipityRatio).<span class="function">round</span>());
+<span class="comment">// Avec limit=20 et ratio=0.1 → serendipityCount = 2</span></pre>
+                    </div>
+
+                    <h4>3.2 Application de la sérendipité</h4>
+                    <span class="file-badge">vector_distance_service.dart → applySerendipity()</span>
+                    <div class="example-box">
+                        <h4>Transformation du vecteur</h4>
+                        <p><strong>Vecteur base :</strong><br>
+                        <span class="highlight-yellow">[0.5, 0.5, 0.6, 0.4, 0.4, 0.6, 0.6, 0.5(Europe), 0.5(Afrique), 0, 0, 0, 0]</span></p>
+                        <p><strong>Après inversion :</strong><br>
+                        <span class="highlight-green">[0.5, 0.5, 0.4, 0.6, 0.6, 0.4, 0.4, 0, 0, 1.0(Asie), 0, 0, 0]</span></p>
+                        <p><em>Les continents sont inversés : Asie/Océanie au lieu d'Europe/Afrique</em></p>
+                    </div>
+
+                    <h4>3.3 Calcul de similarité cosinus</h4>
+                    <div class="code-block">
+                        <pre><span class="keyword">for</span> (final entry in destVectors.entries) {
+  <span class="comment">// Similarité cosinus</span>
+  <span class="keyword">final</span> similarity = _vectorService.<span class="function">cosineSimilarity</span>(
+    searchVector.<span class="function">toArray</span>(),
+    destVector.<span class="function">toArray</span>(),
+  );
+  
+  <span class="comment">// Score sur 100</span>
+  <span class="keyword">final</span> score = (similarity + <span class="number">1.0</span>) * <span class="number">50.0</span>; <span class="comment">// [-1,1] → [0,100]</span>
+}</pre>
+                    </div>
+                    <div class="result-box">
+                        <h4>Résultat</h4>
+                        <ul>
+                            <li>Calcul sur ~<strong>560 destinations</strong></li>
+                            <li>Tri par score décroissant (Timsort)</li>
+                            <li>Retour des <strong>2 meilleures</strong> destinations en Asie/Amérique/Océanie</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">4</span>Filtrage par continent des préférences</h3>
+                    <div class="result-box">
+                        <h4>Résultat du filtrage</h4>
+                        <ul>
+                            <li><code>byContinentVectors['Europe']</code> : ~<strong>140 destinations</strong></li>
+                            <li><code>byContinentVectors['Afrique']</code> : ~<strong>80 destinations</strong></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">5</span>Calcul des poids par continent</h3>
+                    <span class="file-badge">recommendation_service.dart → _calculateContinentWeights()</span>
+                    <div class="example-box">
+                        <h4>Poids calculés</h4>
+                        <p><strong>Si poids égaux :</strong> <code>{'Europe': 0.5, 'Afrique': 0.5}</code></p>
+                        <p><strong>Après plusieurs likes en Afrique :</strong> <code>{'Europe': 0.42, 'Afrique': 0.58}</code></p>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">6</span>Calcul par continent</h3>
+                    <h4>Pour chaque continent :</h4>
+                    <div class="code-block">
+                        <pre><span class="keyword">final</span> targetCount = (weight * remainingSlots).<span class="function">ceil</span>();
+<span class="comment">// remainingSlots = 18 (20 total - 2 sérendipité)</span>
+<span class="comment">// Pour Afrique: (0.58 * 18).ceil() = 11</span>
+
+<span class="keyword">final</span> results = <span class="keyword">await</span> <span class="function">_computeVectorDistances</span>(
+  userVector: userVector,
+  destVectors: continentVectors,
+  enableSerendipity: <span class="keyword">false</span>,
+  limit: targetCount,
+);</pre>
+                    </div>
+                    <div class="result-box">
+                        <h4>Résultat</h4>
+                        <ul>
+                            <li><strong>Europe :</strong> 7 destinations (0.42 × 18 ≈ 7.56)</li>
+                            <li><strong>Afrique :</strong> 11 destinations (0.58 × 18 ≈ 10.44)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">7</span>Combinaison avec round-robin</h3>
+                    <div class="workflow-diagram">Alternance Europe → Afrique → Europe → Afrique...
+Liste de 18 destinations bien réparties</div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">8</span>Combinaison finale et mélange</h3>
+                    <div class="result-box">
+                        <h4>Résultat final : 20 destinations</h4>
+                        <ul>
+                            <li><strong>3</strong> meilleures destinations (non mélangées)</li>
+                            <li><strong>17</strong> autres destinations (mélangées)</li>
+                            <li><strong>2</strong> en mode sérendipité (continent différent)</li>
+                            <li><strong>18</strong> normales (Europe + Afrique selon poids)</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ZOOM SUR L'ALGORITHME -->
+            <section id="zoom-algo" class="tab-content" data-steps='[
+                "Analyse détaillée des phases",
+                "Complexité totale",
+                "Optimisation apportée par le découpage continental",
+                "Pistes d&apos;optimisation futures"
+            ]'>
+                <h2><span class="emoji">🔍</span>Zoom sur l'algorithme _computeVectorDistances()</h2>
+
+                <div class="warning-box">
+                    <h4>⚠️ Points critiques identifiés</h4>
+                    <p>Les deux moments les plus coûteux sont :</p>
+                    <ol>
+                        <li><strong>Sérendipité :</strong> <code>_computeVectorDistances()</code> sur ~560 destinations</li>
+                        <li><strong>Par continent :</strong> <code>_computeVectorDistances()</code> sur ~140 (Europe) + ~80 (Afrique)</li>
+                    </ol>
+                </div>
+
+                <div class="step-card">
+                    <h3>Analyse détaillée des phases</h3>
+
+                    <h4><span class="complexity-badge complexity-constant">Phase 1 : O(1)</span> Application de la sérendipité</h4>
+                    <p>Coût : <strong>Constant</strong> - Inversion de vecteur (13 valeurs), sélection aléatoire de 1-2 continents</p>
+
+                    <h4><span class="complexity-badge complexity-linear">Phase 2 : O(n)</span> Chargement des destinations</h4>
+                    <p>Coût : <strong>Linéaire</strong> - Lecture SQLite + création Map, n = ~560 destinations</p>
+
+                    <h4><span class="complexity-badge complexity-linear">Phase 3 : O(n × d)</span> Calcul de similarité</h4>
+                    <p><strong>Détail du calcul de similarité cosinus :</strong></p>
+                    <table>
+                        <tr>
+                            <th>Opération</th>
+                            <th>Complexité</th>
+                            <th>Opérations</th>
+                        </tr>
+                        <tr>
+                            <td>Produit scalaire</td>
+                            <td>O(13)</td>
+                            <td>13 mult. + 12 add. = <strong>25 ops</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Norme A</td>
+                            <td>O(13)</td>
+                            <td>13 carrés + 12 add. + 1 √ = <strong>26 ops</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Norme B</td>
+                            <td>O(13)</td>
+                            <td>13 carrés + 12 add. + 1 √ = <strong>26 ops</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Division</td>
+                            <td>O(1)</td>
+                            <td><strong>1 op</strong></td>
+                        </tr>
+                        <tr style="background: #e8f5e9; font-weight: bold;">
+                            <td colspan="2">TOTAL par destination</td>
+                            <td>~<strong>78 opérations</strong></td>
+                        </tr>
+                    </table>
+
+                    <div class="example-box">
+                        <h4>Coût total Phase 3</h4>
+                        <ul>
+                            <li><strong>Sérendipité :</strong> 560 dest. × 78 ops = <strong>43 680 ops</strong></li>
+                            <li><strong>Europe :</strong> 140 dest. × 78 ops = <strong>10 920 ops</strong></li>
+                            <li><strong>Afrique :</strong> 80 dest. × 78 ops = <strong>6 240 ops</strong></li>
+                        </ul>
+                    </div>
+
+                    <h4><span class="complexity-badge complexity-nlogn">Phase 4 : O(n log n)</span> Tri par score décroissant</h4>
+                    <div class="step-card" style="background: #fff9c4;">
+                        <h4>🎯 Algorithme de tri : Timsort</h4>
+                        <p><strong>Caractéristiques :</strong></p>
+                        <ul>
+                            <li>Hybride entre Merge Sort et Insertion Sort</li>
+                            <li>Développé par Tim Peters pour Python</li>
+                            <li>Adopté par Java, Dart, Swift</li>
+                            <li>Optimisé pour les données partiellement triées</li>
+                        </ul>
+                        <p><strong>Complexité :</strong></p>
+                        <ul>
+                            <li>Meilleur cas : <strong>O(n)</strong> (données déjà triées)</li>
+                            <li>Cas moyen : <strong>O(n log n)</strong></li>
+                            <li>Pire cas : <strong>O(n log n)</strong></li>
+                            <li>Mémoire : <strong>O(n)</strong> - stable</li>
+                        </ul>
+                    </div>
+
+                    <table>
+                        <tr>
+                            <th>Scénario</th>
+                            <th>Destinations</th>
+                            <th>Comparaisons</th>
+                        </tr>
+                        <tr>
+                            <td>Sérendipité</td>
+                            <td>560</td>
+                            <td>~<strong>5 600</strong> (560 × log₂(560) ≈ 560 × 9.13)</td>
+                        </tr>
+                        <tr>
+                            <td>Europe</td>
+                            <td>140</td>
+                            <td>~<strong>1 000</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Afrique</td>
+                            <td>80</td>
+                            <td>~<strong>530</strong></td>
+                        </tr>
+                    </table>
+
+                    <h4><span class="complexity-badge complexity-linear">Phase 5 : O(k)</span> Extraction des N meilleures</h4>
+                    <p>Coût : <strong>Linéaire</strong> - k = limit (2 pour sérendipité, 7-11 pour continents)</p>
+                </div>
+
+                <div class="step-card">
+                    <h3>📊 Complexité totale</h3>
+                    <div class="result-box">
+                        <h4>Formule générale : <strong>O(n × d + n log n)</strong></h4>
+                        <p>Où :</p>
+                        <ul>
+                            <li>n = nombre de destinations à évaluer</li>
+                            <li>d = dimension du vecteur (13)</li>
+                        </ul>
+                        <p><strong>Simplification :</strong> d est constant, donc <strong>O(n + n log n) = O(n log n)</strong></p>
+                    </div>
+
+                    <h3>Comparaison des scénarios</h3>
+                    <table>
+                        <tr>
+                            <th>Scénario</th>
+                            <th>Destinations (n)</th>
+                            <th>Calcul similarité</th>
+                            <th>Tri</th>
+                            <th>Total approximatif</th>
+                        </tr>
+                        <tr>
+                            <td><strong>Sérendipité</strong></td>
+                            <td>560</td>
+                            <td>43 680 ops</td>
+                            <td>5 600 comp.</td>
+                            <td><strong>~49 000 ops</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Europe</strong></td>
+                            <td>140</td>
+                            <td>10 920 ops</td>
+                            <td>1 000 comp.</td>
+                            <td><strong>~12 000 ops</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Afrique</strong></td>
+                            <td>80</td>
+                            <td>6 240 ops</td>
+                            <td>530 comp.</td>
+                            <td><strong>~6 800 ops</strong></td>
+                        </tr>
+                        <tr style="background: #e8f5e9; font-weight: bold;">
+                            <td colspan="4">TOTAL</td>
+                            <td><strong>~68 000 ops</strong></td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="step-card">
+                    <h3>⚡ Optimisation apportée par le découpage continental</h3>
+
+                    <h4>Avant (calcul global)</h4>
+                    <div class="workflow-diagram">Calcul sur TOUTES les destinations (560)
+│
+├─ Similarité cosinus : 560 × 78 = 43 680 ops
+├─ Tri : 560 log(560) ≈ 5 600 comparaisons
+└─ Total : ~49 000 ops
+
+Sérendipité (2 destinations)
+├─ Similarité cosinus : 560 × 78 = 43 680 ops
+├─ Tri : 560 log(560) ≈ 5 600 comparaisons
+└─ Total : ~49 000 ops
+
+TOTAL : ~98 000 ops</div>
+
+                    <h4>Après (calcul par continent)</h4>
+                    <div class="workflow-diagram">Sérendipité (2 destinations)
+├─ Similarité cosinus : 560 × 78 = 43 680 ops
+├─ Tri : 560 log(560) ≈ 5 600 comparaisons
+└─ Total : ~49 000 ops
+
+Europe (7 destinations)
+├─ Similarité cosinus : 140 × 78 = 10 920 ops
+├─ Tri : 140 log(140) ≈ 1 000 comparaisons
+└─ Total : ~12 000 ops
+
+Afrique (11 destinations)
+├─ Similarité cosinus : 80 × 78 = 6 240 ops
+├─ Tri : 80 log(80) ≈ 530 comparaisons
+└─ Total : ~6 800 ops
+
+TOTAL : ~68 000 ops</div>
+
+                    <div class="result-box">
+                        <h4><span class="gain-badge">Gain : ~30%</span></h4>
+                        <p>Réduction de <strong>98 000 ops</strong> à <strong>68 000 ops</strong> pour ce cas précis</p>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3>💡 Pistes d'optimisation futures</h3>
+
+                    <div class="optimization-card">
+                        <h4>1. Index spatial par continent (pré-filtrage)</h4>
+                        <div class="code-block">
+                            <pre><span class="comment">// Charger UNIQUEMENT les vecteurs du continent</span>
+<span class="keyword">final</span> europeVectors = <span class="keyword">await</span> _cacheService.<span class="function">getVectorsByContinent</span>(<span class="string">'Europe'</span>);</pre>
+                        </div>
+                        <p><strong>Gain :</strong> Éviter de charger les 560 destinations à chaque fois</p>
+                    </div>
+
+                    <div class="optimization-card">
+                        <h4>2. Cache des normes de vecteurs</h4>
+                        <div class="code-block">
+                            <pre><span class="keyword">class</span> DestinationVector {
+  <span class="keyword">final</span> List&lt;<span class="keyword">double</span>&gt; values;
+  <span class="keyword">double</span>? _cachedNorm; <span class="comment">// Calculé une seule fois</span>
+  
+  <span class="keyword">double</span> <span class="keyword">get</span> norm {
+    _cachedNorm ??= <span class="function">sqrt</span>(values.<span class="function">map</span>((x) =&gt; x * x).<span class="function">reduce</span>((a, b) =&gt; a + b));
+    <span class="keyword">return</span> _cachedNorm!;
+  }
+}</pre>
+                        </div>
+                        <p><strong>Gain :</strong> Économiser 26 ops par calcul de similarité (division de moitié)</p>
+                    </div>
+
+                    <div class="optimization-card">
+                        <h4>3. Tri partiel (Top-K algorithm)</h4>
+                        <div class="code-block">
+                            <pre><span class="comment">// Au lieu de :</span>
+results.<span class="function">sort</span>(...);
+<span class="keyword">return</span> results.<span class="function">take</span>(limit);
+
+<span class="comment">// Utiliser un QuickSelect ou MinHeap :</span>
+<span class="keyword">return</span> <span class="function">selectTopK</span>(results, limit); <span class="comment">// O(n) au lieu de O(n log n)</span></pre>
+                        </div>
+                        <p><strong>Gain :</strong></p>
+                        <ul>
+                            <li>Sérendipité : 5 600 comp. → <strong>560 comparaisons</strong> (90% de réduction)</li>
+                            <li>Europe : 1 000 → <strong>140</strong></li>
+                            <li>Afrique : 530 → <strong>80</strong></li>
+                        </ul>
+                        <div class="gain-badge">Nouveau total : ~51 000 ops (25% de gain)</div>
+                    </div>
+
+                    <div class="optimization-card">
+                        <h4>4. Parallélisation</h4>
+                        <div class="code-block">
+                            <pre><span class="keyword">final</span> results = <span class="keyword">await</span> Future.<span class="function">wait</span>([
+  <span class="function">_computeVectorDistances</span>(continent: <span class="string">'Europe'</span>),
+  <span class="function">_computeVectorDistances</span>(continent: <span class="string">'Afrique'</span>),
+]);</pre>
+                        </div>
+                        <p><strong>Gain :</strong> Calculs simultanés sur multi-cœurs</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- WORKFLOW 2 -->
+            <section id="workflow2" class="tab-content" data-steps='[
+                "Point d&apos;entrée",
+                "Mise à jour activité",
+                "Mise à jour urbain/nature",
+                "Mise à jour température",
+                "Mise à jour poids continents",
+                "Mise à jour favoris",
+                "Biais court terme"
+            ]'>
+                <h2><span class="emoji">🧠</span>Workflow 2 : Mise à jour du Profil Utilisateur</h2>
+
+                <div class="step-card">
+                    <h3>Point d'entrée : <span class="file-badge">recommendations_page.dart → _finishGameAndRecompute()</span></h3>
+                    <div class="code-block">
+                        <pre><span class="keyword">Future</span>&lt;<span class="keyword">void</span>&gt; <span class="function">_finishGameAndRecompute</span>() <span class="keyword">async</span> {
+  <span class="keyword">if</span> (_likedDestinations.isNotEmpty || _dislikedDestinations.isNotEmpty) {
+    <span class="keyword">final</span> updatedPrefs = _learningService.<span class="function">updatePreferencesFromInteractions</span>(
+      currentPrefs: _userPreferences,
+      likedDestinations: _likedDestinations,
+      dislikedDestinations: _dislikedDestinations,
+    );
+    
+    <span class="function">setState</span>(() {
+      _userPreferences = updatedPrefs;
+    });
+  }
+  
+  <span class="keyword">await</span> _cacheService.<span class="function">clearCache</span>();
+  <span class="keyword">await</span> <span class="function">_loadRecommendations</span>();
+}</pre>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">1</span>Mise à jour du niveau d'activité</h3>
+                    <span class="file-badge">user_learning_service.dart → _learnActivityLevel()</span>
+                    
+                    <div class="example-box">
+                        <h4>Exemple de calcul</h4>
+                        <ul>
+                            <li><strong>Niveau actuel :</strong> 50</li>
+                            <li><strong>3 destinations likées :</strong> [70, 80, 75]</li>
+                            <li><strong>Moyenne likée :</strong> 75</li>
+                            <li><strong>Learning rate :</strong> 0.1 (3 interactions)</li>
+                            <li><strong>Nouveau niveau :</strong> 50 + (75 - 50) × 0.1 = <span class="highlight-green">52.5</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="result-box">
+                        <h4>Formule</h4>
+                        <p><code>newLevel = currentLevel + (avgLiked - currentLevel) × learningRate</code></p>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">2</span>Mise à jour de la préférence urbain/nature</h3>
+                    <p>Même logique que pour l'activité, appliquée sur le score urbain/nature</p>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">3</span>Mise à jour de la température préférée</h3>
+                    <span class="file-badge">user_learning_service.dart → _learnTemperaturePreference()</span>
+                    
+                    <div class="example-box">
+                        <h4>Exemple de calcul</h4>
+                        <ul>
+                            <li><strong>Temp min actuelle :</strong> 15°C</li>
+                            <li><strong>Destinations likées :</strong> [22°C, 25°C, 24°C]</li>
+                            <li><strong>Moyenne :</strong> 23.67°C</li>
+                            <li><strong>Target :</strong> 23.67 - 3 = 20.67°C</li>
+                            <li><strong>Learning rate :</strong> 0.1</li>
+                            <li><strong>Nouvelle temp min :</strong> 15 + (20.67 - 15) × 0.1 = <span class="highlight-green">15.57°C</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">4</span>Mise à jour des poids continentaux</h3>
+                    <span class="file-badge">user_learning_service.dart → _learnContinentWeights()</span>
+                    
+                    <div class="example-box">
+                        <h4>Exemple de calcul</h4>
+                        <ul>
+                            <li><strong>Poids actuels :</strong> {'Europe': 0.5, 'Afrique': 0.5}</li>
+                            <li><strong>3 destinations likées :</strong> 2 en Afrique, 1 en Europe</li>
+                            <li><strong>Learning rate :</strong> 0.1 × 0.5 = 0.05</li>
+                            <li><strong>Boost Afrique :</strong> 0.05 × 2 = 0.1</li>
+                            <li><strong>Boost Europe :</strong> 0.05 × 1 = 0.05</li>
+                            <li><strong>Avant normalisation :</strong> {'Europe': 0.55, 'Afrique': 0.60}</li>
+                            <li><strong>Somme :</strong> 1.15</li>
+                            <li><strong>Après normalisation :</strong> <span class="highlight-green">{'Europe': 0.48, 'Afrique': 0.52}</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="result-box">
+                        <h4>Algorithme</h4>
+                        <ol>
+                            <li>Compter les likes par continent</li>
+                            <li><code>boost = learningRate × count</code></li>
+                            <li><code>newWeight = oldWeight + boost</code></li>
+                            <li>Renormalisation pour que la somme = 1</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">5</span>Mise à jour individuelle (favoris)</h3>
+                    <span class="file-badge">favorites_service.dart → addFavorite()</span>
+                    
+                    <p class="arrow">↓ Appel vers</p>
+                    
+                    <span class="file-badge">user_learning_service.dart → updateFromSingleInteraction()</span>
+                    
+                    <div class="example-box">
+                        <h4>Exemple : Ajout favori en Afrique</h4>
+                        <ul>
+                            <li><strong>Poids actuels :</strong> {'Europe': 0.48, 'Afrique': 0.52}</li>
+                            <li><strong>Like sur destination :</strong> Le Caire (Afrique)</li>
+                            <li><strong>Learning rate :</strong> 0.05 (faible pour 1 interaction)</li>
+                            <li><strong>Nouveau poids Afrique :</strong> 0.52 + 0.05 = 0.57</li>
+                            <li><strong>Avant norm :</strong> {'Europe': 0.48, 'Afrique': 0.57}</li>
+                            <li><strong>Somme :</strong> 1.05</li>
+                            <li><strong>Après norm :</strong> <span class="highlight-green">{'Europe': 0.457, 'Afrique': 0.543}</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-number">6</span>Application du biais court terme</h3>
+                    <span class="file-badge">recent_bias_service.dart → applyRecentBias()</span>
+                    
+                    <div class="result-box">
+                        <h4>Processus</h4>
+                        <ol>
+                            <li>Récupérer les 10 derniers likes (7 jours)</li>
+                            <li>Créer un vecteur "tendance" basé sur ces destinations</li>
+                            <li>Mélanger <strong>90% base + 10% tendance</strong></li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="workflow-diagram">Workflow Mise à jour profil
+↓
+recommendations_page.dart → _finishGameAndRecompute()
+↓
+user_learning_service.dart → updatePreferencesFromInteractions()
+↓
+├─ _learnActivityLevel()
+│   └─ Moyenne des destinations likées
+│   └─ currentLevel + (moyenne - current) × learningRate
+│
+├─ _learnUrbanLevel()
+│   └─ Même logique pour urbain/nature
+│
+├─ _learnTemperaturePreference()
+│   └─ Moyenne températures - 3°C
+│
+├─ _learnBudgetPreference()
+│   └─ Moyenne budgets likés
+│
+└─ _learnContinentWeights()
+    ├─ Compter likes par continent
+    ├─ Boost = learningRate × count
+    ├─ newWeight = oldWeight + boost
+    └─ Renormalisation (somme = 1)</div>
+            </section>
+
+            <!-- EXEMPLE COMPLET -->
+            <section id="example" class="tab-content" data-steps='[
+                "Situation initiale",
+                "Mini-jeu : 5 choix",
+                "Après le mini-jeu",
+                "Ajout favori",
+                "Prochain calcul"
+            ]'>
+                <h2><span class="emoji">💡</span>Exemple Complet Pas à Pas</h2>
+
+                <div class="step-card">
+                    <h3>Situation initiale</h3>
+                    <ul>
+                        <li><strong>Continents :</strong> Europe, Afrique (poids égaux 0.5/0.5)</li>
+                        <li><strong>Activité :</strong> 50</li>
+                        <li><strong>Urbain :</strong> 40</li>
+                        <li><strong>Température min :</strong> 15°C</li>
+                    </ul>
+                </div>
+
+                <div class="step-card" style="background: #fff3e0;">
+                    <h3>Mini-jeu : 5 choix</h3>
+                    <ol>
+                        <li>✅ <strong>Marrakech</strong> (Afrique) - Activité: 60, Urbain: 70, Temp: 22°C</li>
+                        <li>✅ <strong>Le Cap</strong> (Afrique) - Activité: 55, Urbain: 65, Temp: 20°C</li>
+                        <li>❌ <strong>Berlin</strong> (Europe) - Activité: 40, Urbain: 90</li>
+                        <li>✅ <strong>Nairobi</strong> (Afrique) - Activité: 70, Urbain: 60, Temp: 19°C</li>
+                        <li>❌ <strong>Amsterdam</strong> (Europe) - Activité: 35, Urbain: 85</li>
+                    </ol>
+                </div>
+
+                <div class="step-card" style="background: #e8f5e9;">
+                    <h3>Après le mini-jeu (updatePreferencesFromInteractions)</h3>
+
+                    <h4>Activité</h4>
+                    <ul>
+                        <li>Likées : [60, 55, 70] → moyenne = 61.67</li>
+                        <li>Learning rate : 0.2 (5 interactions)</li>
+                        <li><strong>Nouveau :</strong> 50 + (61.67 - 50) × 0.2 = <span class="highlight-green">52.33</span></li>
+                    </ul>
+
+                    <h4>Urbain</h4>
+                    <ul>
+                        <li>Likées : [70, 65, 60] → moyenne = 65</li>
+                        <li><strong>Nouveau :</strong> 40 + (65 - 40) × 0.2 = <span class="highlight-green">45</span></li>
+                    </ul>
+
+                    <h4>Température</h4>
+                    <ul>
+                        <li>Likées : [22, 20, 19] → moyenne = 20.33°C</li>
+                        <li>Target : 20.33 - 3 = 17.33°C</li>
+                        <li><strong>Nouveau :</strong> 15 + (17.33 - 15) × 0.2 = <span class="highlight-green">15.47°C</span></li>
+                    </ul>
+
+                    <h4>Poids continents</h4>
+                    <ul>
+                        <li>Likes : 3 Afrique, 0 Europe</li>
+                        <li>Boost Afrique : 0.1 × 3 = 0.3</li>
+                        <li>Avant norm : {Europe: 0.5, Afrique: 0.8}</li>
+                        <li><strong>Après norm :</strong> <span class="highlight-green">{Europe: 0.38, Afrique: 0.62}</span></li>
+                    </ul>
+                </div>
+
+                <div class="step-card" style="background: #e3f2fd;">
+                    <h3>Ajout d'un favori : Le Caire (Afrique)</h3>
+                    <ul>
+                        <li>Learning rate : 0.05</li>
+                        <li>weights[Afrique] : 0.62 + 0.05 = 0.67</li>
+                        <li><strong>Après norm :</strong> <span class="highlight-green">{Europe: 0.36, Afrique: 0.64}</span></li>
+                    </ul>
+                </div>
+
+                <div class="step-card" style="background: #f3e5f5;">
+                    <h3>Prochain calcul de recommandations</h3>
+                    <h4>Répartition (sur 18 places normales)</h4>
+                    <ul>
+                        <li><strong>Europe :</strong> 0.36 × 18 = 6.48 → <strong>7 destinations</strong></li>
+                        <li><strong>Afrique :</strong> 0.64 × 18 = 11.52 → <strong>11 destinations</strong></li>
+                    </ul>
+                    <p><strong>Plus :</strong> 2 destinations sérendipité (Asie, Océanie...)</p>
+                    <div class="result-box">
+                        <h4>✨ Total : 20 recommandations adaptées au nouveau profil !</h4>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RÉSUMÉ VISUEL -->
+            <section>
+                <h2><span class="emoji">📊</span>Résumé visuel des workflows</h2>
+
+                <div class="workflow-diagram">Workflow Recommandations
+↓
+recommendations_page.dart
+  ↓
+recommendation_service.dart → getRecommendationsVectorBased()
+  ↓
+├─ user_preferences_model.dart → toVector()
+│   └─ user_vector_model.dart → weightsMapToVector()
+│
+├─ recent_bias_service.dart → applyRecentBias()
+│
+├─ vector_cache_service.dart → getDestinationVectors()
+│
+├─ SÉRENDIPITÉ (2 destinations)
+│   ├─ vector_distance_service.dart → applySerendipity()
+│   │   └─ _invertContinent() → Asie/Océanie au lieu d'Europe/Afrique
+│   │
+│   └─ Pour chaque destination (~560)
+│       ├─ cosineSimilarity(vecteurSérendipité, vecteurDestination)
+│       ├─ score = (similarité + 1) × 50
+│       └─ TOP 2
+│
+└─ RECOMMANDATIONS NORMALES (18 destinations)
+    ├─ Filtrage par continent (Europe, Afrique)
+    │
+    ├─ Calcul des poids (depuis vecteur utilisateur)
+    │   Europe: 0.48, Afrique: 0.52
+    │
+    ├─ Pour CHAQUE continent:
+    │   ├─ Nombre cible = poids × 18
+    │   │   Europe: 9, Afrique: 9
+    │   │
+    │   └─ Pour chaque destination du continent
+    │       ├─ cosineSimilarity(vecteurUser, vecteurDestination)
+    │       ├─ score = (similarité + 1) × 50 + bonusActivités
+    │       └─ TOP N destinations
+    │
+    └─ Round-robin: Europe → Afrique → Europe → Afrique...</div>
+            </section>
+        </div>
+        </div>
+
+        <footer>
+            <p><strong>Workflow Algorithmique - Système de Recommandation Vectoriel</strong></p>
+            <p>Documentation générée le 18 janvier 2026</p>
+            <p>Optimisation par découpage continental avec apprentissage adaptatif</p>
+        </footer>
+    </div>
+
+    <script>
+        // Toggle sidebar
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const content = document.querySelector('.content');
+            const toggleBtn = document.querySelector('.sidebar-toggle');
+            
+            sidebar.classList.toggle('collapsed');
+            content.classList.toggle('full-width');
+            toggleBtn.classList.toggle('collapsed');
+        }
+
+        // Gestion des onglets
+        function switchTab(tabId) {
+            // Masquer tous les contenus
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Retirer l'état actif de tous les boutons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Afficher le contenu sélectionné
+            document.getElementById(tabId).classList.add('active');
+
+            // Activer le bouton correspondant
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+
+            // Mettre à jour la sidebar
+            updateSidebar(tabId);
+
+            // Scroll en haut
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Mettre à jour la sidebar selon l'onglet actif
+        function updateSidebar(tabId) {
+            const section = document.getElementById(tabId);
+            const stepsData = section.getAttribute('data-steps');
+            
+            if (!stepsData) return;
+
+            const steps = JSON.parse(stepsData);
+            const sidebarNav = document.getElementById('sidebar-nav');
+            
+            sidebarNav.innerHTML = '';
+            
+            steps.forEach((step, index) => {
+                const li = document.createElement('li');
+                li.textContent = step;
+                li.setAttribute('data-step', index);
+                li.onclick = () => scrollToStep(index);
+                sidebarNav.appendChild(li);
+            });
+
+            // Activer le premier élément
+            setTimeout(() => {
+                highlightCurrentStep();
+            }, 100);
+        }
+
+        // Scroll vers une étape
+        function scrollToStep(stepIndex) {
+            const activeSection = document.querySelector('.tab-content.active');
+            // Sélectionner uniquement les step-cards principales (pas celles imbriquées)
+            const allStepCards = activeSection.querySelectorAll('.step-card');
+            const stepCards = Array.from(allStepCards).filter(card => {
+                // Exclure les step-cards qui sont à l'intérieur d'une autre step-card
+                return !card.parentElement.closest('.step-card');
+            });
+            
+            if (stepCards[stepIndex]) {
+                const cardPosition = stepCards[stepIndex].offsetTop;
+                const offsetPosition = cardPosition - 100; // Compensation pour le header fixe
+                
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        // Mettre en surbrillance l'étape actuelle lors du scroll
+        function highlightCurrentStep() {
+            const activeSection = document.querySelector('.tab-content.active');
+            if (!activeSection) return;
+
+            // Sélectionner uniquement les step-cards principales (pas celles imbriquées)
+            const allStepCards = activeSection.querySelectorAll('.step-card');
+            const stepCards = Array.from(allStepCards).filter(card => {
+                // Exclure les step-cards qui sont à l'intérieur d'une autre step-card
+                return !card.parentElement.closest('.step-card');
+            });
+            const sidebarItems = document.querySelectorAll('.sidebar li');
+            
+            let currentStep = 0;
+            const scrollPosition = window.scrollY + 200;
+
+            stepCards.forEach((card, index) => {
+                const cardTop = card.offsetTop;
+                if (scrollPosition >= cardTop) {
+                    currentStep = index;
+                }
+            });
+
+            sidebarItems.forEach((item, index) => {
+                if (index === currentStep) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
+        // Écouter le scroll
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(highlightCurrentStep, 100);
+        });
+
+        // Initialiser la sidebar au chargement
+        document.addEventListener('DOMContentLoaded', () => {
+            updateSidebar('workflow1');
+        });
+    </script>

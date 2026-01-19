@@ -9,11 +9,12 @@ import '../models/destination_vector_model.dart';
 import 'vector_distance_service.dart';
 import 'vector_cache_service.dart';
 import 'recent_bias_service.dart';
+import 'performance_profiler.dart';
 
 /// Résultat de recommandation avec le score détaillé
 class RecommendationResult {
   final Destination destination;
-  final double totalScore;
+  double totalScore; // Non final pour permettre la mise à jour après calcul bonus
   final Map<String, double> scoreBreakdown;
   final List<Activity> topActivities;
   final bool isSerendipity; // Flag pour indiquer si c'est une recommandation sérendipité
@@ -27,8 +28,7 @@ class RecommendationResult {
   });
 }
 
-/// Service de recommandation simplifié et pertinent
-/// Basé uniquement sur les vraies données de la DB
+/// Service de recommandation
 class RecommendationServiceV2 {
   static final RecommendationServiceV2 _instance = RecommendationServiceV2._internal();
   factory RecommendationServiceV2() => _instance;
@@ -60,7 +60,7 @@ class RecommendationServiceV2 {
     );
     print('✅ ${eligibleDestinations.length} destinations éligibles');
 
-    // 3. Scorer chaque destination
+    // 3. Scorer chaque destination éligible
     final results = <RecommendationResult>[];
     for (final destination in eligibleDestinations) {
       final score = await _scoreDestination(
@@ -113,9 +113,9 @@ class RecommendationServiceV2 {
         }
       }
 
-      // Filtre 2: Budget (écart max de ±2 niveaux)
+      // Filtre 2: Budget (écart max de ±1 niveaux)
       final destBudget = DestinationService.getBudgetLevelNumeric(dest);
-      if ((destBudget - prefs.budgetLevel).abs() > 2.0) {
+      if ((destBudget - prefs.budgetLevel).abs() > 1.0) {
         filteredByBudget++;
         return false;
       }
@@ -429,7 +429,13 @@ class RecommendationServiceV2 {
   final VectorCacheService _cacheService = VectorCacheService();
   final RecentBiasService _biasService = RecentBiasService();
 
-  /// Recommandations basées sur la distance vectorielle (NOUVELLE MÉTHODE)
+  /// Recommandations basées sur la distance vectorielle OPTIMISÉE
+  /// 
+  /// Nouvelle approche :
+  /// 1. Trouver 2 destinations en mode sérendipité
+  /// 2. Calculer un poids pour chaque continent basé sur la proximité du vecteur utilisateur
+  /// 3. Répartir les calculs selon ces poids (évite de calculer sur toute la base)
+  /// 4. Garantit la diversité continentale
   /// 
   /// [prefs] Préférences utilisateur
   /// [limit] Nombre de résultats
@@ -444,77 +450,213 @@ class RecommendationServiceV2 {
     int limit = 10,
     double serendipityRatio = 0.1,  // 10% par défaut
     bool includeRecentBias = true,
-    bool continentOnlySerendipity = false, // Nouveau paramètre pour mini-jeu
-    Set<String>? excludeIds, // Nouveau paramètre pour éviter les doublons
+    bool continentOnlySerendipity = false,
+    Set<String>? excludeIds,
+    PerformanceProfiler? profiler, // Nouveau paramètre
   }) async {
-    print('🎯 === RECOMMANDATIONS VECTORIELLES ===');
+    print('🎯 === RECOMMANDATIONS VECTORIELLES OPTIMISÉES ===');
     print('   Sérendipité: ${(serendipityRatio * 100).toStringAsFixed(0)}%');
-    if (continentOnlySerendipity) {
-      print('   🌍 Mode: Continent uniquement (mini-jeu)');
-    }
     if (excludeIds != null && excludeIds.isNotEmpty) {
-      print('   🚫 Exclusions: ${excludeIds.length} destinations déjà montrées');
+      print('   🚫 Exclusions: ${excludeIds.length} destinations');
     }
     
-    // 1. Convertir préférences en vecteur
-    UserVector userVector = prefs.toVector();
-    print('   📐 Vecteur utilisateur: $userVector');
-    
-    // 2. Appliquer effet de mode court terme
-    if (includeRecentBias) {
-      userVector = _biasService.applyRecentBias(userVector);
+    // 🎯 Démarrer l'enregistrement si profiler fourni
+    if (profiler != null) {
+      await profiler.startRecording();
     }
     
-    // 3. Charger les vecteurs destinations (depuis cache) et filtrer les exclusions
-    final allDestVectors = await _cacheService.getDestinationVectors();
-    final destVectors = excludeIds != null
-        ? Map.fromEntries(
-            allDestVectors.entries.where((e) => !excludeIds.contains(e.key))
-          )
-        : allDestVectors;
-    print('   📊 ${destVectors.length} vecteurs destinations disponibles');
+    try {
+      // 1. Convertir préférences en vecteur
+      UserVector userVector = prefs.toVector();
+      print('   📐 Vecteur utilisateur: $userVector');
+      
+      // 2. Appliquer effet de mode court terme
+      if (includeRecentBias) {
+        userVector = _biasService.applyRecentBias(userVector);
+      }
     
-    // 4. Calculer le nombre de destinations en mode sérendipité
-    final serendipityCount = (limit * serendipityRatio).round();
-    final normalCount = limit - serendipityCount;
-    
-    print('   🎲 $normalCount normales + $serendipityCount sérendipité');
-    
-    // 5. Calculer distances pour destinations normales
-    final normalResults = await _computeVectorDistances(
-      userVector: userVector,
-      destVectors: destVectors,
-      enableSerendipity: false,
-      continentOnly: false,
-      limit: normalCount * 2,  // Charger plus pour pouvoir filtrer
-    );
-    
-    // 6. Exclure les destinations déjà sélectionnées dans normalResults
-    final usedIds = normalResults.take(normalCount).map((r) => r.destination.id).toSet();
-    final remainingDestVectors = Map.fromEntries(
-      destVectors.entries.where((e) => !usedIds.contains(e.key))
-    );
-    print('   🚫 ${usedIds.length} destinations normales à exclure des sérendipité');
-    
-    // 7. Calculer distances pour destinations sérendipité (sur destinations restantes)
-    final serendipityResults = await _computeVectorDistances(
-      userVector: userVector,
-      destVectors: remainingDestVectors,
-      enableSerendipity: true,
-      continentOnly: continentOnlySerendipity, // Utiliser le nouveau paramètre
-      limit: serendipityCount,
-    );
-    
-    // 8. Combiner et mélanger
-    final combined = <RecommendationResult>[
-      ...normalResults.take(normalCount),
-      ...serendipityResults,
-    ];
-    
-    combined.shuffle(Random());
-    
-    print('   ✅ ${combined.length} recommandations générées (garanties uniques)');
-    return combined.take(limit).toList();
+      // 3. Charger les destinations et vecteurs
+      final allDestVectors = await _cacheService.getDestinationVectors();
+      final allDestinations = await _destinationService.getAllDestinations();
+      final destMap = {for (var d in allDestinations) d.id: d};
+      
+      // Filtrer les exclusions
+      final availableDestVectors = excludeIds != null
+          ? Map.fromEntries(
+              allDestVectors.entries.where((e) => !excludeIds.contains(e.key))
+            )
+          : allDestVectors;
+      
+      print('   📊 ${availableDestVectors.length} destinations disponibles');
+      
+      // === ÉTAPE 1 : Trouver 2 destinations sérendipité ===
+      final serendipityCount = max(2, (limit * serendipityRatio).round());
+      print('   🎲 Recherche de $serendipityCount destinations sérendipité...');
+      
+      final serendipityResults = await _computeVectorDistances(
+        userVector: userVector,
+        destVectors: availableDestVectors,
+        enableSerendipity: true,
+        continentOnly: continentOnlySerendipity,
+        limit: serendipityCount,
+        profiler: profiler,
+        stepPrefix: 'Sérendipité',
+      );
+      
+      final usedIds = serendipityResults.map((r) => r.destination.id).toSet();
+      print('   ✓ ${serendipityResults.length} sérendipité trouvées');
+      
+      // === ÉTAPE 2 : Filtrer par continent des préférences ===
+      final remainingSlots = limit - serendipityResults.length;
+      print('   📍 $remainingSlots places restantes à répartir...');
+      
+      if (prefs.selectedContinents.isEmpty || remainingSlots <= 0) {
+        final result = serendipityResults.take(limit).toList();
+        
+        if (profiler != null) {
+          await profiler.stopRecording(version: '1.0');
+        }
+        
+        return result;
+      }
+      
+      // Grouper destinations disponibles par continent
+      final byContinentVectors = <String, Map<String, DestinationVector>>{};
+      for (final continent in prefs.selectedContinents) {
+        byContinentVectors[continent] = {};
+      }
+      
+      for (final entry in availableDestVectors.entries) {
+        final destId = entry.key;
+        if (usedIds.contains(destId)) continue; // Skip sérendipité
+        
+        final dest = destMap[destId];
+        if (dest == null) continue;
+        
+        for (final continent in prefs.selectedContinents) {
+          if (DestinationService.matchesContinent(dest, continent)) {
+            byContinentVectors[continent]![destId] = entry.value;
+            break;
+          }
+        }
+      }
+      
+      // Afficher la répartition
+      for (final entry in byContinentVectors.entries) {
+        print('   ${entry.key}: ${entry.value.length} destinations');
+      }
+      
+      // === ÉTAPE 3 : Calculer les poids par continent (depuis le vecteur utilisateur) ===
+      final weights = _calculateContinentWeights(
+        userVector,
+        prefs.selectedContinents,
+      );
+      
+      print('   ⚖️ Poids des continents:');
+      for (final entry in weights.entries) {
+        print('      ${entry.key}: ${(entry.value * 100).toStringAsFixed(1)}%');
+      }
+      
+      // === ÉTAPE 4 : Calculer les meilleures destinations par continent ===
+      final continentResults = <String, List<RecommendationResult>>{};
+      
+      // Commencer par le continent avec le PLUS FAIBLE poids (comme demandé)
+      final sortedContinents = weights.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value)); // Croissant
+      
+      for (final entry in sortedContinents) {
+        final continent = entry.key;
+        final weight = entry.value;
+        final continentVectors = byContinentVectors[continent]!;
+        
+        if (continentVectors.isEmpty) {
+          continentResults[continent] = [];
+          continue;
+        }
+        
+        // Nombre de destinations à prendre (arrondi au supérieur)
+        final targetCount = (weight * remainingSlots).ceil();
+        print('   🔍 $continent: calcul sur ${continentVectors.length} destinations (cible: $targetCount)...');
+        
+        // Calculer distances UNIQUEMENT pour ce continent
+        final results = await _computeVectorDistances(
+          userVector: userVector,
+          destVectors: continentVectors,
+          enableSerendipity: false,
+          continentOnly: false,
+          limit: targetCount,
+          profiler: profiler,
+          stepPrefix: continent,
+        );
+        
+        continentResults[continent] = results;
+        print('   ✓ ${results.length} résultats pour $continent');
+      }
+      
+      // === ÉTAPE 5 : Combiner avec round-robin ===
+      final normalResults = <RecommendationResult>[];
+      final iterators = <String, int>{};
+      for (final continent in prefs.selectedContinents) {
+        iterators[continent] = 0;
+      }
+      
+      // Round-robin jusqu'à atteindre le nombre voulu
+      while (normalResults.length < remainingSlots) {
+        bool addedAny = false;
+        
+        for (final continent in prefs.selectedContinents) {
+          if (normalResults.length >= remainingSlots) break;
+          
+          final results = continentResults[continent]!;
+          final index = iterators[continent]!;
+          
+          if (index < results.length) {
+            normalResults.add(results[index]);
+            iterators[continent] = index + 1;
+            addedAny = true;
+          }
+        }
+        
+        if (!addedAny) break; // Plus de destinations disponibles
+      }
+      
+      print('   ✓ ${normalResults.length} destinations normales collectées');
+      
+      // === ÉTAPE 6 : Combiner sérendipité + normales ===
+      final combined = <RecommendationResult>[
+        ...serendipityResults,
+        ...normalResults,
+      ];
+      
+      // Mélanger légèrement (garder top 3)
+      if (combined.length > 3) {
+        final top3 = combined.take(3).toList();
+        final rest = combined.skip(3).toList();
+        rest.shuffle(Random());
+        combined.clear();
+        combined.addAll(top3);
+        combined.addAll(rest);
+      }
+      
+      print('   ✅ ${combined.length} recommandations générées (optimisées)');
+      
+      final result = combined.take(limit).toList();
+      
+      // 🎯 Arrêter l'enregistrement si profiler fourni
+      if (profiler != null) {
+        await profiler.stopRecording(version: '1.0');
+      }
+      
+      return result;
+    } catch (e) {
+      // En cas d'erreur, arrêter quand même l'enregistrement
+      if (profiler != null) {
+        try {
+          await profiler.stopRecording(version: '1.0');
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   /// Calcule les distances vectorielles et génère les résultats
@@ -522,15 +664,17 @@ class RecommendationServiceV2 {
     required UserVector userVector,
     required Map<String, DestinationVector> destVectors,
     required bool enableSerendipity,
-    bool continentOnly = false, // Nouveau paramètre
+    bool continentOnly = false,
     required int limit,
+    PerformanceProfiler? profiler,
+    String? stepPrefix,
   }) async {
     // Appliquer sérendipité si demandé
     final searchVector = enableSerendipity
         ? _vectorService.applySerendipity(
             userVector, 
             invertContinent: true,
-            continentOnly: continentOnly, // Utiliser le nouveau paramètre
+            continentOnly: continentOnly,
           )
         : userVector;
 
@@ -540,42 +684,116 @@ class RecommendationServiceV2 {
     final allDestinations = await _destinationService.getAllDestinations();
     final destMap = {for (var d in allDestinations) d.id: d};
 
-    // Calculer similarité pour chaque destination
-    for (final entry in destVectors.entries) {
-      final destId = entry.key;
-      final destVector = entry.value;
-      final destination = destMap[destId];
-      
-      if (destination == null) continue;
+    // 🎯 ÉTAPE 1: Calcul des similarités cosinus (SANS bonus activités)
+    if (profiler != null && stepPrefix != null) {
+      await profiler.measureStep(
+        '$stepPrefix - Calcul similarités',
+        () async {
+          for (final entry in destVectors.entries) {
+            final destId = entry.key;
+            final destVector = entry.value;
+            final destination = destMap[destId];
+            
+            if (destination == null) continue;
 
-      // Similarité cosinus
-      final similarity = _vectorService.cosineSimilarity(
-        searchVector.toArray(),
-        destVector.toArray(),
-      );
+            // Similarité cosinus
+            final similarity = _vectorService.cosineSimilarity(
+              searchVector.toArray(),
+              destVector.toArray(),
+            );
 
-      // Score sur 100
-      final score = (similarity + 1.0) * 50.0; // [-1,1] → [0,100]
+            // Score sur 100
+            final score = (similarity + 1.0) * 50.0; // [-1,1] → [0,100]
 
-      // Bonus activités (léger)
-      final activityBonus = await _calculateActivityBonus(destination, userVector);
-
-      results.add(RecommendationResult(
-        destination: destination,
-        totalScore: score + activityBonus,
-        scoreBreakdown: {
-          'Similarité Vectorielle': score,
-          'Bonus Activités': activityBonus,
+            results.add(RecommendationResult(
+              destination: destination,
+              totalScore: score, // Score basé uniquement sur similarité
+              scoreBreakdown: {
+                'Similarité Vectorielle': score,
+              },
+              topActivities: [],
+              isSerendipity: enableSerendipity,
+            ));
+          }
         },
-        topActivities: [],
-        isSerendipity: enableSerendipity, // Marquer si c'est sérendipité
-      ));
+      );
+    } else {
+      // Sans profiler (mode normal)
+      for (final entry in destVectors.entries) {
+        final destId = entry.key;
+        final destVector = entry.value;
+        final destination = destMap[destId];
+        
+        if (destination == null) continue;
+
+        final similarity = _vectorService.cosineSimilarity(
+          searchVector.toArray(),
+          destVector.toArray(),
+        );
+
+        final score = (similarity + 1.0) * 50.0;
+
+        results.add(RecommendationResult(
+          destination: destination,
+          totalScore: score,
+          scoreBreakdown: {
+            'Similarité Vectorielle': score,
+          },
+          topActivities: [],
+          isSerendipity: enableSerendipity,
+        ));
+      }
     }
 
-    // Trier par score décroissant
-    results.sort((a, b) => b.totalScore.compareTo(a.totalScore));
+    // 🎯 ÉTAPE 2: Tri initial par similarité (avant bonus)
+    if (profiler != null && stepPrefix != null) {
+      await profiler.measureStep(
+        '$stepPrefix - Tri',
+        () async {
+          results.sort((a, b) => b.totalScore.compareTo(a.totalScore));
+        },
+      );
+    } else {
+      results.sort((a, b) => b.totalScore.compareTo(a.totalScore));
+    }
 
-    return results.take(limit).toList();
+    // 🎯 ÉTAPE 3: Sélectionner les top destinations
+    final topResults = results.take(limit).toList();
+    
+    // 🎯 ÉTAPE 4: Calculer bonus activités SEULEMENT pour les destinations retenues
+    if (profiler != null && stepPrefix != null) {
+      await profiler.measureStep(
+        '$stepPrefix - Calcul bonus activités',
+        () async {
+          for (final result in topResults) {
+            final activityBonus = await _calculateActivityBonus(result.destination, userVector);
+            result.scoreBreakdown['Bonus Activités'] = activityBonus;
+            // Mettre à jour le score total
+            final similarity = result.scoreBreakdown['Similarité Vectorielle']!;
+            result.totalScore = similarity + activityBonus;
+          }
+        },
+      );
+      
+      // 🎯 ÉTAPE 5: Re-tri final avec les bonus (affine l'ordre des top destinations)
+      await profiler.measureStep(
+        '$stepPrefix - Tri final',
+        () async {
+          topResults.sort((a, b) => b.totalScore.compareTo(a.totalScore));
+        },
+      );
+    } else {
+      // Sans profiler: calculer bonus et re-trier
+      for (final result in topResults) {
+        final activityBonus = await _calculateActivityBonus(result.destination, userVector);
+        result.scoreBreakdown['Bonus Activités'] = activityBonus;
+        final similarity = result.scoreBreakdown['Similarité Vectorielle']!;
+        result.totalScore = similarity + activityBonus;
+      }
+      topResults.sort((a, b) => b.totalScore.compareTo(a.totalScore));
+    }
+
+    return topResults;
   }
 
   /// Calcule un bonus basé sur les activités (score séparé)
@@ -607,6 +825,49 @@ class RecommendationServiceV2 {
   /// Enregistre une interaction récente (like/dislike)
   void recordInteraction(Destination destination, String action) {
     _biasService.addInteraction(destination, action);
+  }
+
+  /// Calcule les poids pour chaque continent basé sur le vecteur utilisateur
+  /// Utilise DIRECTEMENT les composantes continent du vecteur (déjà entre 0 et 1)
+  /// Retourne un Map<continent, poids> où la somme des poids vaut 1.0
+  Map<String, double> _calculateContinentWeights(
+    UserVector userVector,
+    List<String> continents,
+  ) {
+    final mapping = {
+      'Europe': 0,
+      'Afrique': 1,
+      'Asie': 2,
+      'Amérique du Nord': 3,
+      'Amérique du Sud': 4,
+      'Océanie': 5,
+    };
+    
+    final weights = <String, double>{};
+    double totalWeight = 0.0;
+    
+    // Récupérer les poids depuis le vecteur utilisateur
+    for (final continent in continents) {
+      final index = mapping[continent];
+      if (index != null && index < userVector.continentVector.length) {
+        final weight = userVector.continentVector[index];
+        weights[continent] = weight;
+        totalWeight += weight;
+      }
+    }
+    
+    // Normaliser pour que la somme vaille 1
+    if (totalWeight > 0) {
+      weights.updateAll((key, value) => value / totalWeight);
+    } else {
+      // Si tous les poids sont nuls, répartir équitablement
+      final equalWeight = 1.0 / continents.length;
+      for (final continent in continents) {
+        weights[continent] = equalWeight;
+      }
+    }
+    
+    return weights;
   }
 
   /// Équilibre les recommandations pour assurer une proportion de chaque continent sélectionné
@@ -672,15 +933,37 @@ class RecommendationServiceV2 {
 
     print('   📊 Objectif: $perContinent par continent (+ $remainder de bonus)');
 
-    // Construire la liste équilibrée en alternant entre continents
+    // === ÉTAPE CRITIQUE: Sélectionner le top 1 GLOBAL ===
+    // Comparer les meilleures destinations de chaque continent pour trouver LA meilleure
+    final topCandidates = <RecommendationResult>[];
+    for (final continent in prefs.selectedContinents) {
+      final list = byContinent[continent]!;
+      if (list.isNotEmpty) {
+        topCandidates.add(list.first);
+      }
+    }
+    
+    // Trier les top candidats pour trouver LE meilleur
+    topCandidates.sort((a, b) => b.totalScore.compareTo(a.totalScore));
+    
+    // Construire la liste équilibrée
     final balanced = <RecommendationResult>[];
     final addedIds = <String>{}; // Track IDs pour éviter les doublons
+    
+    // 1. Ajouter le top 1 global d'abord
+    if (topCandidates.isNotEmpty) {
+      final bestOverall = topCandidates.first;
+      balanced.add(bestOverall);
+      addedIds.add(bestOverall.destination.id);
+      print('   🏆 TOP 1 GLOBAL: ${bestOverall.destination.city} (${bestOverall.totalScore.toStringAsFixed(1)} pts)');
+    }
+    
+    // 2. Remplir le reste en alternant entre continents (round-robin)
     final iterators = <int, int>{};
     for (int i = 0; i < prefs.selectedContinents.length; i++) {
       iterators[i] = 0;
     }
 
-    // Remplir en alternant entre continents (round-robin)
     int attempts = 0;
     while (balanced.length < targetCount && attempts < targetCount * 2) {
       bool addedAny = false;
@@ -699,7 +982,6 @@ class RecommendationServiceV2 {
             balanced.add(candidate);
             addedIds.add(candidate.destination.id);
             addedAny = true;
-            print('   ✓ Ajout $continent: ${candidate.destination.city}');
           }
           iterators[i] = index + 1;
         }

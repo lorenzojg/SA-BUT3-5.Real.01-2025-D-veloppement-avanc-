@@ -104,21 +104,13 @@ class ActivityService {
   final db = await AppDatabase().database;
   
   try {
-    print('🔍 Recherche activités pour destination: $destinationId');
+    
     
     final List<Map<String, dynamic>> maps = await db.query(
      'Activite',
       where: 'id_destination = ?',
       whereArgs: [destinationId],
-    );
-    
-    print('📊 ${maps.length} activités trouvées');
-    
-    if (maps.isNotEmpty) {
-      print('🔍 Première activité - Colonnes disponibles: ${maps.first.keys.toList()}');
-      print('🔍 Première activité - Données: ${maps.first}');
-    }
-    
+    );    
     return maps.map((row) => Activity.fromMap(row)).toList();
   } catch (e) {
     print('❌ Erreur lecture activités pour destination $destinationId: $e');

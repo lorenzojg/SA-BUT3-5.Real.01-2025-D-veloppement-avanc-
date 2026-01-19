@@ -8,6 +8,10 @@ class UserPreferencesV2 {
   /// Continents sélectionnés (ex: ['Europe', 'Asie'])
   final List<String> selectedContinents;
   
+  /// Poids de chaque continent (pour affiner les recommandations au fil du temps)
+  /// Si null, utilise des poids égaux
+  final Map<String, double>? continentWeights;
+  
   /// Température minimale souhaitée (en °C)
   /// Ex: 15°C = climat doux minimum, 25°C = climat chaud
   final double minTemperature;
@@ -34,6 +38,7 @@ class UserPreferencesV2 {
 
   UserPreferencesV2({
     required this.selectedContinents,
+    this.continentWeights,
     required this.minTemperature,
     required this.activityLevel,
     required this.urbanLevel,
@@ -70,6 +75,7 @@ class UserPreferencesV2 {
   /// Crée une copie avec des modifications
   UserPreferencesV2 copyWith({
     List<String>? selectedContinents,
+    Map<String, double>? continentWeights,
     double? minTemperature,
     double? activityLevel,
     double? urbanLevel,
@@ -80,6 +86,7 @@ class UserPreferencesV2 {
   }) {
     return UserPreferencesV2(
       selectedContinents: selectedContinents ?? this.selectedContinents,
+      continentWeights: continentWeights ?? this.continentWeights,
       minTemperature: minTemperature ?? this.minTemperature,
       activityLevel: activityLevel ?? this.activityLevel,
       urbanLevel: urbanLevel ?? this.urbanLevel,
@@ -94,6 +101,7 @@ class UserPreferencesV2 {
   Map<String, dynamic> toJson() {
     return {
       'selectedContinents': selectedContinents,
+      'continentWeights': continentWeights,
       'minTemperature': minTemperature,
       'activityLevel': activityLevel,
       'urbanLevel': urbanLevel,
@@ -108,6 +116,9 @@ class UserPreferencesV2 {
   factory UserPreferencesV2.fromJson(Map<String, dynamic> json) {
     return UserPreferencesV2(
       selectedContinents: List<String>.from(json['selectedContinents'] ?? []),
+      continentWeights: json['continentWeights'] != null 
+          ? Map<String, double>.from(json['continentWeights'])
+          : null,
       minTemperature: (json['minTemperature'] as num?)?.toDouble() ?? 15.0,
       activityLevel: (json['activityLevel'] as num?)?.toDouble() ?? 50.0,
       urbanLevel: (json['urbanLevel'] as num?)?.toDouble() ?? 50.0,
@@ -125,6 +136,16 @@ class UserPreferencesV2 {
     final double adventure = activityLevel / 100.0; // Activité = aventure
     final double nature = 1.0 - (urbanLevel / 100.0); // Nature inverse de ville
     
+    // Utiliser les poids sauvegardés ou créer des poids égaux
+    List<double> continentVec;
+    if (continentWeights != null && continentWeights!.isNotEmpty) {
+      // Convertir le Map en vecteur de 6 dimensions
+      continentVec = UserVector.weightsMapToVector(continentWeights!);
+    } else {
+      // Poids égaux par défaut
+      continentVec = UserVector.continentsToWeightedVector(selectedContinents);
+    }
+    
     return UserVector(
       temperature: UserVector.normalizeTemperature(minTemperature),
       budget: UserVector.normalizeBudget(budgetLevel),
@@ -133,7 +154,7 @@ class UserPreferencesV2 {
       culture: culture,
       adventure: adventure,
       nature: nature,
-      continentVector: UserVector.continentsToVector(selectedContinents),
+      continentVector: continentVec,
     );
   }
 

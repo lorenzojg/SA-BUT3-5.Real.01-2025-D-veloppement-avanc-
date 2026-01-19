@@ -8,22 +8,48 @@ class VectorDistanceService {
   factory VectorDistanceService() => _instance;
   VectorDistanceService._internal();
 
-  /// Calcule la similarité cosinus entre deux vecteurs
+  /// Calcule la similarité cosinus entre deux vecteurs AVEC PONDÉRATION
   /// Retourne une valeur entre -1 et 1
   /// 1 = vecteurs identiques, 0 = orthogonaux, -1 = opposés
+  /// 
+  /// Poids par composante (dimension 13):
+  /// - [0] temperature: 2.0x (très important pour correspondance climat)
+  /// - [1] budget: 2.0x
+  /// - [2] activity: 1.0x
+  /// - [3] urban: 1.0x
+  /// - [4] culture: 1.0x
+  /// - [5] adventure: 1.0x
+  /// - [6] nature: 1.0x
+  /// - [7-12] continents: 2.0x chacun (important pour distance géographique)
   double cosineSimilarity(List<double> a, List<double> b) {
     if (a.length != b.length) {
       throw ArgumentError('Vectors must have same length: ${a.length} vs ${b.length}');
     }
+
+    // Poids pour chaque dimension
+    final weights = [
+      2.0, // temperature (très important)
+      2.0, // budget
+      1.0, // activity
+      1.0, // urban
+      1.0, // culture
+      1.0, // adventure
+      1.0, // nature
+      2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // continents (important pour distance géo)
+    ];
 
     double dotProduct = 0.0;
     double normA = 0.0;
     double normB = 0.0;
 
     for (int i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+      final weight = i < weights.length ? weights[i] : 1.0;
+      final weightedA = a[i] * weight;
+      final weightedB = b[i] * weight;
+      
+      dotProduct += weightedA * weightedB;
+      normA += weightedA * weightedA;
+      normB += weightedB * weightedB;
     }
 
     if (normA == 0 || normB == 0) {
@@ -112,22 +138,50 @@ class VectorDistanceService {
     }
   }
 
-  /// Inverse le vecteur continent (choisit des continents différents)
-  UserVector _invertContinent(UserVector vector, Random rng) {
-    // Créer un vecteur continent inversé (activer les continents non sélectionnés)
-    final invertedContinent = vector.continentVector.map((v) => 1.0 - v).toList();
-    
-    // Si tous sont à 0 maintenant, activer aléatoirement 1-2 continents
-    if (invertedContinent.every((v) => v == 0.0)) {
-      final numToActivate = rng.nextInt(2) + 1; // 1 ou 2 continents
-      for (int i = 0; i < numToActivate; i++) {
-        final index = rng.nextInt(6);
-        invertedContinent[index] = 1.0;
-      }
+/// Inverse le vecteur continent (choisit des continents NON sélectionnés)
+UserVector _invertContinent(UserVector vector, Random rng) {
+  // Trouver les continents actuellement ACTIVÉS (1.0)
+  final activatedIndices = <int>[];
+  final inactiveIndices = <int>[];
+  
+  for (int i = 0; i < vector.continentVector.length; i++) {
+    if (vector.continentVector[i] == 1.0) {
+      activatedIndices.add(i);
+    } else {
+      inactiveIndices.add(i);
     }
-    
-    return vector.copyWith(continentVector: invertedContinent);
   }
+  
+  print('   Continents actuels: $activatedIndices → Inversion vers: $inactiveIndices');
+  
+  // Si aucun continent inactif (tous sélectionnés), retourner le vecteur original
+  if (inactiveIndices.isEmpty) {
+    print('   ⚠️ Tous les continents sont sélectionnés, pas d\'inversion possible');
+    return vector;
+  }
+  
+  // Créer un nouveau vecteur avec UNIQUEMENT les continents non sélectionnés
+  final invertedContinent = List<double>.filled(6, 0.0);
+  
+  // Activer aléatoirement 1-2 continents parmi ceux NON sélectionnés
+  final numToActivate = min(rng.nextInt(2) + 1, inactiveIndices.length);
+  inactiveIndices.shuffle(rng);
+  
+  for (int i = 0; i < numToActivate; i++) {
+    invertedContinent[inactiveIndices[i]] = 1.0;
+  }
+  
+  final continentNames = ['Europe', 'Afrique', 'Asie', 'Am. Nord', 'Am. Sud', 'Océanie'];
+  final activatedNames = <String>[];
+  for (int i = 0; i < invertedContinent.length; i++) {
+    if (invertedContinent[i] == 1.0) {
+      activatedNames.add(continentNames[i]);
+    }
+  }
+  print('   ✅ Nouveaux continents sérendipité: ${activatedNames.join(", ")}');
+  
+  return vector.copyWith(continentVector: invertedContinent);
+}
 
   /// Distance euclidienne (alternative, moins utilisée)
   double euclideanDistance(List<double> a, List<double> b) {
