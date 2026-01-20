@@ -59,7 +59,7 @@ class AboutPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Serendia',
+                    'SérendIA',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -70,7 +70,7 @@ class AboutPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'L\'art de découvrir sans chercher',
+                    "L'art de s'envoler vers l'inattendu...",
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 16,
