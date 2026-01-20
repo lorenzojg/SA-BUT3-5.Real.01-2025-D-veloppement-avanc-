@@ -218,7 +218,7 @@ class AboutPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 15),
                 Text(
-                  '© 2024 Serendia\nTous droits réservés',
+                  '© 2026 Serendia\nTous droits réservés',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.5),
                     fontSize: 12,
@@ -327,8 +327,8 @@ class AboutPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _buildStep(1, 'Répondez à 3 questions simples', 
-              'Continent, activité et budget'),
+          _buildStep(1, 'Répondez à 6 questions simples',
+              'Continent, nombre de voyageurs, environnement, température, activité et budget'),
           _buildStep(2, 'Notre algorithme analyse votre profil', 
               'Intelligence artificielle adaptative'),
           _buildStep(3, 'Découvrez vos destinations', 
@@ -588,7 +588,7 @@ class AboutPage extends StatelessWidget {
       children: [
         Expanded(
           child: _buildStatCard(
-            '200+',
+            '560+',
             'Destinations',
             Icons.public,
             Colors.blue.shade400,
