@@ -4,7 +4,7 @@
 
 ---
 
-## 🚀 Fonctionnalités Clés
+## Fonctionnalités Clés
 
 ### Moteur de Recommandation Intelligent
 *   **Profilage Vectoriel** : L'application convertit vos réponses (Ville vs Nature, Chill vs Actif) en un vecteur mathématique (Culture, Aventure, Détente, etc.) pour trouver les destinations les plus proches de votre "ADN de voyageur".
@@ -52,7 +52,7 @@
 
 Ce projet a suivi une roadmap technique rigoureuse pour passer d'un simple prototype à une application intelligente :
 
-### Phase 1 : Fondations & Données 🏗️
+### Phase 1 : Fondations & Données
 *   [x] Modélisation des données (`Destination`, `Activity`).
 *   [x] Création des scripts d'importation Python pour nettoyer les datasets CSV/JSONL.
 *   [x] Migration du stockage de fichiers JSON statiques vers une base de données **SQLite** robuste.
