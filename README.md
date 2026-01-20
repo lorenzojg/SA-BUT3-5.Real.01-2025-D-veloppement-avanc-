@@ -67,7 +67,12 @@ Ce projet a suivi une roadmap technique rigoureuse pour passer d'un simple proto
 *   [x] **Boucle de Rétroaction** : Implémentation du `UserInteractionService` qui modifie le vecteur utilisateur à chaque "Like/Dislike".
 *   [x] **UI Polishing** : Ajout de `RefreshIndicator`, correction des débordements de texte (Overflows), et intégration du Mini-Jeu dans le flux principal.
 
-### Pour en savoir plus sur le Workflow algorithmique, vous pouvez consulter le fichier WORKFLOW_ALGORITHM.html
+### Informations complémentaires :
+*   ```html
+    <p>Pour en savoir plus sur le Workflow algorithmique, vous pouvez consulter le fichier WORKFLOW_ALGORITHM.html en cliquant <a href="WORKFLOW_ALGORITHM.html">ici</a></p>
+    ```
+
+
 ---
 
 ## Structure du Projet
